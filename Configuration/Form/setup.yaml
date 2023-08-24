@@ -1,0 +1,214 @@
+TYPO3:
+  CMS:
+    Form:
+      persistenceManager:
+        allowedExtensionPaths:
+          110: EXT:ns_basetheme/Resources/Private/Forms/
+        allowSaveToExtensionPaths: true
+        allowDeleteFromExtensionPaths: true
+      prototypes:
+        standard:
+          finishersDefinition:
+            formEditor:
+              iconIdentifier: form-finisher
+              label: Zoho CRM Finisher
+              predefinedDefaults:
+                options: []
+            ZohoFinisher:
+              implementationClassName: 'Nitsan\NsZoho\Finishers\ApiFinisher'
+          formElementsDefinition:
+            Form:
+              formEditor:
+                editors:
+                  500:
+                    identifier: zohomodule
+                    templateName: Inspector-SingleSelectEditor
+                    label: Zoho Module
+                    propertyPath: renderingOptions.zohomodule
+                    selectOptions:
+                      10:
+                        value: Leads
+                        label: 'Leads'
+                      20:
+                        value: Contacts
+                        label: 'Contacts'
+                      30:
+                        value: Career
+                        label: 'Career'
+                      40:
+                        value: Accounts
+                        label: 'Accounts'
+                      50:
+                        value: Products
+                        label: 'Products'
+                  900:
+                    selectOptions:
+                      1560425499:
+                        value: 'ZohoFinisher'
+                        label: 'Zoho CRM Finisher'
+                propertyCollections:
+                  finishers:
+                    1560425499:
+                      identifier: 'ZohoFinisher'
+                      editors:
+                        100:
+                          identifier: header
+                          templateName: Inspector-CollectionElementHeaderEditor
+                          label: Zoho CRM Finisher
+                        9999:
+                          identifier: removeButton
+                          templateName: Inspector-RemoveElementEditor        
+              renderingOptions:
+                translation:
+                  translationFile:
+                    110: 'EXT:ns_zoho/Resources/Private/Language/locallang.xlf'
+            Text:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+                
+            Textarea:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+                
+            Email:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+                
+            Number:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+                
+            Telephone:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+            Hidden:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+            Url:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue                
+            Checkbox:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+              properties:
+                containerClassAttribute: 'custom-control custom-checkbox'
+                elementClassAttribute: 'custom-control-input'
+            GridRow:
+              properties:
+                elementClassAttribute: 'form-row row'
+            MultiCheckbox:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+              properties:
+                containerClassAttribute: 'custom-checkbox-multiple'
+                elementClassAttribute: 'custom-control-input'
+            MultiSelect:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+              properties:
+                elementClassAttribute: 'custom-select form-control'
+            RadioButton:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+              properties:
+                containerClassAttribute: 'custom-radio-multiple'
+                elementClassAttribute: 'custom-control-input'
+            SingleSelect:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+              properties:
+                elementClassAttribute: 'custom-select'
+            FileUpload:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+              properties:
+                elementClassAttribute: 'custom-file-input'
+            ImageUpload:
+              formEditor:
+                editors:
+                  600:
+                    identifier: zohoValue
+                    templateName: Inspector-TextEditor
+                    label: Zoho Value
+                    propertyPath: renderingOptions.zohoValue
+              properties:
+                elementClassAttribute: 'custom-file-input'
+                imageLinkMaxWidth: 1200
+                imageMaxWidth: 200
+                imageMaxHeight: 200
+            DatePicker:
+              properties:
+                elementClassAttribute: 'form-control'
+                timeSelectorClassAttribute: 'custom-select form-control'
+
+      mixins:
+        formElementMixins:
+          FormElementMixin:
+            properties:
+              elementErrorClassAttribute: 'is-invalid'
+  

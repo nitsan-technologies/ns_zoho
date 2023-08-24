@@ -1,0 +1,9 @@
+// Configure default frontend form
+plugin.tx_form.settings.yamlConfigurations {
+    104 = EXT:ns_zoho/Configuration/Form/setup.yaml
+}
+
+// Configure default backend form
+module.tx_form.settings.yamlConfigurations {
+    104 = EXT:ns_zoho/Configuration/Form/setup.yaml
+}

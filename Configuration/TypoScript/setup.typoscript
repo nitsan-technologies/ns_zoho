@@ -1,0 +1,12 @@
+# Includes EXT:Form Configuration
+@import 'EXT:ns_zoho/Configuration/TypoScript/Extensions/Form/*.typoscript'
+
+plugin.tx_nszoho {
+    settings {
+        zohoURL = {$plugin.tx_nszoho.settings.zohoURL}
+        zohoAccountURL = {$plugin.tx_nszoho.settings.zohoAccountURL}
+        authtoken = {$plugin.tx_nszoho.settings.authtoken}
+        client_id = {$plugin.tx_nszoho.settings.client_id}
+        client_secret = {$plugin.tx_nszoho.settings.client_secret}
+    }
+}

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<xliff version="1.0">
+	<file source-language="en" datatype="plaintext" original="messages" date="2017-08-03T12:31:30Z" product-name="ns_zoho">
+		<header/>
+		<body>
+			<trans-unit id="settings.zohoURL" xml:space="preserve">
+				<source>Zoho URL:i.e. https://www.zohoapis.in</source>
+			</trans-unit>
+			<trans-unit id="settings.zohoAccountURL" xml:space="preserve">
+				<source>Zoho Account URL:i.e. https://accounts.zoho.in</source>
+			</trans-unit>
+			<trans-unit id="settings.authtoken" xml:space="preserve">
+				<source>Auth Token</source>
+			</trans-unit>
+			<trans-unit id="settings.client_id" xml:space="preserve">
+				<source>Client ID</source>
+			</trans-unit>
+			<trans-unit id="settings.client_secret" xml:space="preserve">
+				<source>Client Secret</source>
+			</trans-unit>
+		</body>
+	</file>
+</xliff>

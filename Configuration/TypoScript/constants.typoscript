@@ -1,0 +1,15 @@
+plugin.tx_nszoho {
+  settings {
+    # cat=plugin.tx_nszoho/100/1; type=string; label=LLL:EXT:ns_zoho/Resources/Private/Language/locallang.xlf:settings.zohoURL
+    zohoURL = https://www.zohoapis.in
+    # cat=plugin.tx_nszoho/100/2; type=string; label=LLL:EXT:ns_zoho/Resources/Private/Language/locallang.xlf:settings.zohoAccountURL
+    zohoAccountURL = https://accounts.zoho.in
+    # cat=plugin.tx_nszoho/100/3; type=string; label=LLL:EXT:ns_zoho/Resources/Private/Language/locallang.xlf:settings.authtoken
+    authtoken = authtoken
+    # cat=plugin.tx_nszoho/100/4; type=string; label=LLL:EXT:ns_zoho/Resources/Private/Language/locallang.xlf:settings.client_id
+    client_id = 
+    # cat=plugin.tx_nszoho/100/5; type=string; label=LLL:EXT:ns_zoho/Resources/Private/Language/locallang.xlf:settings.client_secret
+    client_secret = 
+  }
+
+}
