@@ -81,8 +81,10 @@ class ApiFinisher extends AbstractFinisher
         foreach ($formRuntime->getFormDefinition()->getRenderablesRecursively() as $element) {
             if($element->getType() != 'Page' && $element->getType() != 'GridRow' && $element->getType() != 'Fieldset' && $element->getType() != 'Checkbox' && $element->getType() != 'StaticText' && $element->getType() != 'Recaptcha' && $element->getType() != 'Honeypot'){
                 foreach($element->getRenderingOptions() as $key => $newProperties){
+
                     if($key == 'zohoValue'){
-                        if(is_string($newProperties) && !empty($newProperties)){
+
+                        if(is_string($newProperties)){
                             $resultExtensProperties[] = $newProperties;
                         }
                         
@@ -114,7 +116,7 @@ class ApiFinisher extends AbstractFinisher
                 }
             }
         }
-        
+
         $finalResult = array_combine($resultExtensProperties, $matchingFormValues);
         
         $replaceImgValue = array("Record_Image" => $fileName);
