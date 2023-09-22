@@ -1,14 +1,15 @@
 <?php
 
 $EM_CONF[$_EXTKEY] = [
-    'title' => '[NITSAN] Nitsan Zoho',
+    'title' => '[NITSAN] Zoho TYPO3 Extension',
     'description' => 'Easily install and configure your typo3 form with zoho CRM',
     'category' => 'plugin',
     'author' => 'T3D: Pradeepsinh Masani, Nilesh Malankiya',
     'author_email' => 'sanjay@nitsan.in',
     'author_company' => 'NITSAN Technologies Pvt Ltd',
     'state' => 'stable',
-    'clearCacheOnLoad' => 0,
+    'uploadfolder' => 0,
+    'createDirs' => '',
     'version' => '1.0.1',
     'constraints' => [
         'depends' => [
