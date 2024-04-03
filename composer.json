@@ -1,8 +1,8 @@
 {
     "name": "nitsan/ns-zoho",
     "type": "typo3-cms-extension",
-    "description": "Easily install and configure your typo3 form with zoho CRM",
-    "homepage": "https://extensions.typo3.org/extension/ns_zoho/",
+    "description": "The TYPO3 Zoho Extension offers seamless integration between TYPO3 forms and Zoho CRM, streamlining the lead management process. By automatically capturing leads from your website, this innovative integration ensures no opportunity is missed. *** Live Demo: https://demo.t3planet.com/t3-extensions/typo3-zoho-crm *** Premium Version, Documentation & Free Support: https://t3planet.com/typo3-zoho-extension",
+    "homepage": "https://demo.t3planet.com/t3-extensions/typo3-zoho-crm",
     "license": "GPL-2.0+",
     "keywords": [
         "TYPO3 CMS",

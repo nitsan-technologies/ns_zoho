@@ -1,4 +1,7 @@
-# ns_zoho
+# Zoho
 
-- FREE version: You can download FREE version with basic-features at https://extensions.typo3.org/extension/ns_zoho/
-- PRO version: You can download PRO version with more-features & free-support at https://t3planet.com/typo3-zoho-extension
+- Live Frontend Demo: https://demo.t3planet.com/t3-extensions/typo3-zoho-crm
+- Free version: https://extensions.typo3.org/extension/ns_zoho/
+- Premium version: https://t3planet.com/typo3-zoho-extension
+- Documentation: https://docs.t3planet.com/en/latest/ExtNsZoho/Index.html
+- Changelog: https://t3planet.com/typo3-zoho-extension
