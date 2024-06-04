@@ -17,11 +17,19 @@ declare(strict_types=1);
 
 namespace Nitsan\NsZoho\Finishers;
 
+use Doctrine\DBAL\DBALException;
+use Doctrine\DBAL\Driver\Exception;
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Exception\RequestException;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Form\Domain\Finishers\Exception\FinisherException;
 use TYPO3\CMS\Form\Domain\Finishers\AbstractFinisher;
 use TYPO3\CMS\Extbase\Domain\Model\FileReference;
 use TYPO3\CMS\Form\Domain\Model\FormElements\FileUpload;
-
+use TYPO3\CMS\Core\Http\RequestFactory;
+use TYPO3\CMS\Core\Database\Connection;
 /**
  * This finisher sends an email to one recipient
  *
@@ -50,6 +58,8 @@ use TYPO3\CMS\Form\Domain\Model\FormElements\FileUpload;
  */
 class ApiFinisher extends AbstractFinisher
 {
+    protected const INDEX_TABLE = 'zoho_crm_authentication';
+
     /**
      * @var array
      */
@@ -62,21 +72,64 @@ class ApiFinisher extends AbstractFinisher
 
     /**
      * Executes this finisher
+     * @throws FinisherException*@throws GuzzleException
+     * @throws GuzzleException
+     * @throws DBALException
+     * @throws Exception
      * @see AbstractFinisher::execute()
      *
-     * @throws FinisherException
      */
     protected function executeInternal()
     {
         $formRuntime = $this->finisherContext->getFormRuntime();
+        $refToken = '';
 
         // get configuration from extension manager
         $constant = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nszoho.']['settings.'];
         $availablefileds = $formRuntime->getFormState()->getFormValues();
         $resultExtensProperties = [];
 
-        $refreshToken = $this->generateNewAccessToken($constant);
-        $auth = $refreshToken['access_token'];
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+            ->getQueryBuilderForTable(self::INDEX_TABLE);
+
+        $zohoAuthData = $queryBuilder
+            ->select('*')
+            ->from(self::INDEX_TABLE)
+            ->where(
+                $queryBuilder->expr()->eq(
+                    'client_id', $queryBuilder->createNamedParameter($constant['client_id'], Connection::PARAM_STR)
+                ),
+                $queryBuilder->expr()->eq(
+                    'client_secret', $queryBuilder->createNamedParameter($constant['client_secret'], Connection::PARAM_STR)
+                )
+            )
+            ->execute()
+            ->fetchAllAssociative();
+
+        if(empty($zohoAuthData)){
+            $refreshTokenGenerate = $this->generateRefreshToken($constant);
+            $refToken = $refreshTokenGenerate->refresh_token;
+
+            $zohoContent = [
+                'pid' => 0,
+                'client_id' => $constant['client_id'],
+                'client_secret' => $constant['client_secret'],
+                'authtoken' => $refToken,
+            ];
+
+            $queryBuilder
+                ->insert(self::INDEX_TABLE)
+                ->values($zohoContent)
+                ->execute();
+        }
+        else {
+            foreach ($zohoAuthData as $zoho) {
+                $refToken = $zoho['authtoken'];
+            }
+        }
+
+        $refreshToken = $this->generateNewAccessToken($constant, $refToken);
+        $auth = $refreshToken->access_token;
 
         foreach ($formRuntime->getFormDefinition()->getRenderablesRecursively() as $element) {
             if($element->getType() != 'Page' && $element->getType() != 'GridRow' && $element->getType() != 'Fieldset' && $element->getType() != 'Checkbox' && $element->getType() != 'StaticText' && $element->getType() != 'Recaptcha' && $element->getType() != 'Honeypot'){
@@ -87,20 +140,20 @@ class ApiFinisher extends AbstractFinisher
                         if(is_string($newProperties)){
                             $resultExtensProperties[] = $newProperties;
                         }
-                        
+
                         if (!$element instanceof FileUpload) {
                             continue;
                         }
                         $file = $formRuntime[$element->getIdentifier()];
-    
+
                         if (!$file) {
                             continue;
                         }
-    
+
                         if ($file instanceof FileReference) {
                             $file = $file->getOriginalResource();
                         }
-    
+
                         $folder = $file->getParentFolder();
                         $folderName = $folder->getName();
                         $fileName = $file->getName();
@@ -118,23 +171,17 @@ class ApiFinisher extends AbstractFinisher
         }
 
         $finalResult = array_combine($resultExtensProperties, $matchingFormValues);
-        
+
         $replaceImgValue = array("Record_Image" => $fileName);
         $finalResult = array_replace($finalResult,$replaceImgValue);
-        $zohoModule = $formRuntime->getFormDefinition()->getRenderingOptions()['zohomodule'];
+        $zohoModule = 'Leads';
 
-        // postData to CRM module
-        if(empty($zohoModule)){
-            $zohoModule = 'Lead';
-        } 
         $result = $this->postData($auth, $finalResult, $zohoModule);
-        
+
         if($fileName) {
-            $result2 = json_decode($result);
-            $data = get_object_vars($result2);
-            $data2 = get_object_vars($data['data'][0]);
-            $data3 = get_object_vars($data2['details']);
-            $recordId = $data3['id'];
+            $responseData = $result['data'][0];
+            $details = $responseData['details'];
+            $recordId = $details['id'];
 
             // UploadFiles to CRM Module
             $this->uploadFile('Attachments', $auth, $zohoModule, $folderName, $recordId, $finalResult['Record_Image']);
@@ -144,30 +191,30 @@ class ApiFinisher extends AbstractFinisher
 
     /**
      * postData to CRM Module
-     * 
+     *
+     * @throws GuzzleException
      */
     public function postData($auth, $finalResult, $zohoModule)
     {
         $constant = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nszoho.']['settings.'];
-        $url = $constant['zohoURL']."/crm/v2/".$zohoModule;
 
         $json = '{
                 "data":[
                 '.
-                    json_encode($finalResult)
-                .'
+            json_encode($finalResult)
+            .'
             ]
         }';
 
         // curl configuration for postData
-        $response = $this->getCurl($url, $json, $auth, 'application/json');
-        return $response;
+        return $this->getCurl($constant, $json, $auth);
     }
 
     /**
      * uploadFiles to CRM Module
      *
      * @return void
+     * @throws GuzzleException
      */
     public function uploadFile($attachType, $auth, $zohoModule, $folderName, $recordId, $sendyourdetail)
     {
@@ -186,98 +233,90 @@ class ApiFinisher extends AbstractFinisher
         $json = array("file" => $cfile);
 
         // curl configuration for uploadFiles
-        $response = $this->getCurlForAttachment($url, $json, $auth, 'multipart/form-data');
-        return $response;
+        return $this->getCurlForAttachment($url, $json, $auth);
     }
 
-    public function getCurlForAttachment($url, $json, $auth, $contentType)
+    /**
+     * @throws GuzzleException
+     */
+    public function getCurlForAttachment($url, $json, $auth)
     {
-        $authtoken = array('Authorization: Zoho-oauthtoken '.$auth, 'Content-Type: ' . $contentType);
+        $client = new Client();
 
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $authtoken);
+        $responseAttachment = $client->request('POST', $url, [
+            'headers' => [
+                'Authorization' => "Zoho-oauthtoken $auth",
+            ],
+            'multipart' => [
+                [
+                    'name'     => 'file',
+                    'contents' => fopen($json['file']->name, 'r'),
+                ],
+            ],
+        ]);
 
-        $response = curl_exec($ch);
+        $responseAttachmentBody = $responseAttachment->getBody()->getContents();
 
-        return $response;
+        return json_decode($responseAttachmentBody, true);
     }
 
-    public function getCurl($url, $data, $auth, $contentType)
+    /**
+     * @throws GuzzleException
+     */
+    public function getCurl($constant, $data, $auth)
     {
-        $authtoken = array('Authorization: Zoho-oauthtoken '.$auth, 'Content-Type: ' . $contentType);
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $authtoken);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
-        curl_setopt($ch, CURLOPT_POSTFIELDS,$data);
 
-        $response = curl_exec($ch);
+        $apiURL = $constant['zohoURL'] . '/crm/v2/Leads';
 
-        return $response;
+        $client = new Client();
+
+        $headers = [
+            'Content-Type' => 'application/json',
+            'Authorization' => 'Zoho-oauthtoken ' . $auth,
+        ];
+
+        try {
+
+            $response = $client->post($apiURL, [
+                'headers' => $headers,
+                'body' => $data,
+            ]);
+            $responseBody = $response->getBody()->getContents();
+
+            return json_decode($responseBody, true);
+        } catch (RequestException $e) {
+            $errorMessage = $e->getMessage();
+            $errorCode = $e->getCode();
+
+            if ($e->hasResponse()) {
+                echo $e->getResponse()->getBody()->getContents();
+            }
+            return [
+                'error' => $errorMessage,
+                'code' => $errorCode,
+            ];
+        }
     }
 
     public function generateRefreshToken($constant)
     {
-        $tokenUrl = $constant['zohoAccountURL'] . "/oauth/v2/token";
-        $postData = [
-            "grant_type" => "authorization_code",
-            "client_id" => $constant['client_id'],
-            "client_secret" => $constant['client_secret'],
-            "code" => $constant['authtoken']
-        ];
+        $url = $constant['zohoAccountURL'] . "/oauth/v2/token?code=" . $constant['authtoken'] . "&client_id=" . $constant['client_id'] . "&client_secret=" . $constant['client_secret'] ."&grant_type=authorization_code";
 
-        $curl = curl_init($tokenUrl);
-        curl_setopt($curl, CURLOPT_POST, true);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($postData));
-
-        $response = curl_exec($curl);
-
-        if (curl_errno($curl)) {
-            $error = curl_error($curl);
-            // Handle the error
-        } else {
-            $jsonResponse = json_decode($response, true);
-            $refreshToken = $jsonResponse['refresh_token'];
-            // Store the refresh token securely for future use
-        }
-
-        $newAccessToken = $this->generateNewAccessToken($refreshToken, $constant);
-
-        return $newAccessToken;
+        $requestFactory = GeneralUtility::makeInstance(RequestFactory::class);
+        $finalRequest = $requestFactory->request($url, 'POST');
+        return json_decode($finalRequest->getBody()->getContents());
     }
 
-    public function generateNewAccessToken($constant)
+    /**
+     */
+    public function generateNewAccessToken($constant, $newRefreshToken)
     {
-        $newAccessTokenUrl = $constant['zohoAccountURL'] . "/oauth/v2/token";
-        $postDataForNewAccessToken = [
-            "refresh_token" => $constant['authtoken'],
-            "grant_type" => "refresh_token",
-            "client_id" => $constant['client_id'],
-            "client_secret" => $constant['client_secret'],
-        ];
+        $url = $constant['zohoAccountURL'] . "/oauth/v2/token?refresh_token=" . $newRefreshToken ."&client_id=" . $constant['client_id'] . "&client_secret=" . $constant['client_secret'] ."&grant_type=refresh_token";
 
-        $curl = curl_init($newAccessTokenUrl);
-        curl_setopt($curl, CURLOPT_POST, true);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($postDataForNewAccessToken));
+        $requestFactory = GeneralUtility::makeInstance(RequestFactory::class);
+        $finalRequest = $requestFactory->request($url, 'POST');
+        return json_decode($finalRequest->getBody()->getContents());
 
-        $response = curl_exec($curl);
-
-        if (curl_errno($curl)) {
-            $error = curl_error($curl);
-            // Handle the error
-        } else {
-            $jsonResponse = json_decode($response, true);
-            $refreshToken = $jsonResponse['access_token'];
-            // Store the refresh token securely for future use
-        }
-
-        return $jsonResponse;
     }
 
 }
