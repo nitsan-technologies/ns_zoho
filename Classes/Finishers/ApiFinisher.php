@@ -104,23 +104,25 @@ class ApiFinisher extends AbstractFinisher
                 )
             )
             ->execute()
-            ->fetchAllAssociative();
+            ->fetchAll();
 
-        if(empty($zohoAuthData)){
+        if(count($zohoAuthData) == 0){
             $refreshTokenGenerate = $this->generateRefreshToken($constant);
-            $refToken = $refreshTokenGenerate->refresh_token;
+            if($refreshTokenGenerate->refresh_token){
+                $refToken = $refreshTokenGenerate->refresh_token;
+                $zohoContent = [
+                    'pid' => 0,
+                    'client_id' => $constant['client_id'],
+                    'client_secret' => $constant['client_secret'],
+                    'authtoken' => $refToken,
+                ];
 
-            $zohoContent = [
-                'pid' => 0,
-                'client_id' => $constant['client_id'],
-                'client_secret' => $constant['client_secret'],
-                'authtoken' => $refToken,
-            ];
+                $queryBuilder
+                    ->insert(self::INDEX_TABLE)
+                    ->values($zohoContent)
+                    ->execute();
 
-            $queryBuilder
-                ->insert(self::INDEX_TABLE)
-                ->values($zohoContent)
-                ->execute();
+            }
         }
         else {
             foreach ($zohoAuthData as $zoho) {
@@ -176,7 +178,7 @@ class ApiFinisher extends AbstractFinisher
         $finalResult = array_replace($finalResult,$replaceImgValue);
         $zohoModule = 'Leads';
 
-        $result = $this->postData($auth, $finalResult, $zohoModule);
+        $result = $this->postData($auth, $finalResult);
 
         if($fileName) {
             $responseData = $result['data'][0];
@@ -194,7 +196,7 @@ class ApiFinisher extends AbstractFinisher
      *
      * @throws GuzzleException
      */
-    public function postData($auth, $finalResult, $zohoModule)
+    public function postData($auth, $finalResult)
     {
         $constant = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nszoho.']['settings.'];
 
@@ -220,8 +222,8 @@ class ApiFinisher extends AbstractFinisher
     {
 
         // Upload file to CRM module
-        $target_dir = 'fileadmin/user_upload/';
-        $filename = $_SERVER['DOCUMENT_ROOT'] . dirname($_SERVER['SCRIPT_NAME']) . $target_dir . $folderName . '/' . $sendyourdetail;
+        $target_dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/');
+        $filename = $target_dir . $folderName . '/' . $sendyourdetail;
 
         if (function_exists('curl_file_create')) {
             $cfile = curl_file_create($filename, '', basename($filename));
