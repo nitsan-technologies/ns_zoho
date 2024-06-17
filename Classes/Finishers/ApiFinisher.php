@@ -17,45 +17,18 @@ declare(strict_types=1);
 
 namespace Nitsan\NsZoho\Finishers;
 
-use Doctrine\DBAL\DBALException;
 use Doctrine\DBAL\Driver\Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Form\Domain\Finishers\Exception\FinisherException;
 use TYPO3\CMS\Form\Domain\Finishers\AbstractFinisher;
 use TYPO3\CMS\Extbase\Domain\Model\FileReference;
 use TYPO3\CMS\Form\Domain\Model\FormElements\FileUpload;
 use TYPO3\CMS\Core\Http\RequestFactory;
 use TYPO3\CMS\Core\Database\Connection;
-/**
- * This finisher sends an email to one recipient
- *
- * Options:
- *
- * - templateName (mandatory): Template name for the mail body
- * - templateRootPaths: root paths for the templates
- * - layoutRootPaths: root paths for the layouts
- * - partialRootPaths: root paths for the partials
- * - variables: associative array of variables which are available inside the Fluid template
- *
- * The following options control the mail sending. In all of them, placeholders in the form
- * of {...} are replaced with the corresponding form value; i.e. {email} as senderAddress
- * makes the recipient address configurable.
- *
- * - subject (mandatory): Subject of the email
- * - recipients (mandatory): Email addresses and human-readable names of the recipients
- * - senderAddress (mandatory): Email address of the sender
- * - senderName: Human-readable name of the sender
- * - replyToRecipients: Email addresses and human-readable names of the reply-to recipients
- * - carbonCopyRecipients: Email addresses and human-readable names of the copy recipients
- * - blindCarbonCopyRecipients: Email addresses and human-readable names of the blind copy recipients
- * - title: The title of the email - If not set "subject" is used by default
- *
- * Scope: frontend
- */
+
 class ApiFinisher extends AbstractFinisher
 {
     protected const INDEX_TABLE = 'zoho_crm_authentication';
@@ -72,14 +45,12 @@ class ApiFinisher extends AbstractFinisher
 
     /**
      * Executes this finisher
-     * @throws FinisherException*@throws GuzzleException
      * @throws GuzzleException
-     * @throws DBALException
      * @throws Exception
      * @see AbstractFinisher::execute()
      *
      */
-    protected function executeInternal()
+    protected function executeInternal(): void
     {
         $formRuntime = $this->finisherContext->getFormRuntime();
         $refToken = '';
@@ -92,21 +63,9 @@ class ApiFinisher extends AbstractFinisher
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getQueryBuilderForTable(self::INDEX_TABLE);
 
-        $zohoAuthData = $queryBuilder
-            ->select('*')
-            ->from(self::INDEX_TABLE)
-            ->where(
-                $queryBuilder->expr()->eq(
-                    'client_id', $queryBuilder->createNamedParameter($constant['client_id'], Connection::PARAM_STR)
-                ),
-                $queryBuilder->expr()->eq(
-                    'client_secret', $queryBuilder->createNamedParameter($constant['client_secret'], Connection::PARAM_STR)
-                )
-            )
-            ->execute()
-            ->fetchAll();
+        $tokenResult = $this->tokenContent($constant, $queryBuilder);
 
-        if(count($zohoAuthData) == 0){
+        if(count($tokenResult) == 0){
             $refreshTokenGenerate = $this->generateRefreshToken($constant);
             if($refreshTokenGenerate->refresh_token){
                 $refToken = $refreshTokenGenerate->refresh_token;
@@ -125,7 +84,7 @@ class ApiFinisher extends AbstractFinisher
             }
         }
         else {
-            foreach ($zohoAuthData as $zoho) {
+            foreach ($tokenResult as $zoho) {
                 $refToken = $zoho['authtoken'];
             }
         }
@@ -192,6 +151,27 @@ class ApiFinisher extends AbstractFinisher
     }
 
     /**
+     * Get Token Data From Table
+     *
+     */
+    public function tokenContent($constant, $queryBuilder): array
+    {
+        return $queryBuilder
+            ->select('*')
+            ->from(self::INDEX_TABLE)
+            ->where(
+                $queryBuilder->expr()->eq(
+                    'client_id', $queryBuilder->createNamedParameter($constant['client_id'], Connection::PARAM_STR)
+                ),
+                $queryBuilder->expr()->eq(
+                    'client_secret', $queryBuilder->createNamedParameter($constant['client_secret'], Connection::PARAM_STR)
+                )
+            )
+            ->execute()
+            ->fetchAll();
+    }
+
+    /**
      * postData to CRM Module
      *
      * @throws GuzzleException
@@ -245,21 +225,36 @@ class ApiFinisher extends AbstractFinisher
     {
         $client = new Client();
 
-        $responseAttachment = $client->request('POST', $url, [
-            'headers' => [
-                'Authorization' => "Zoho-oauthtoken $auth",
-            ],
-            'multipart' => [
-                [
-                    'name'     => 'file',
-                    'contents' => fopen($json['file']->name, 'r'),
+        try {
+
+            $responseAttachment = $client->request('POST', $url, [
+                'headers' => [
+                    'Authorization' => "Zoho-oauthtoken $auth",
                 ],
-            ],
-        ]);
+                'multipart' => [
+                    [
+                        'name' => 'file',
+                        'contents' => fopen($json['file']->name, 'r'),
+                    ],
+                ],
+            ]);
 
-        $responseAttachmentBody = $responseAttachment->getBody()->getContents();
+            $responseAttachmentBody = $responseAttachment->getBody()->getContents();
 
-        return json_decode($responseAttachmentBody, true);
+            return json_decode($responseAttachmentBody, true);
+
+        } catch (RequestException $e) {
+            $errorMessage = $e->getMessage();
+            $errorCode = $e->getCode();
+
+            if ($e->hasResponse()) {
+                echo $e->getResponse()->getBody()->getContents();
+            }
+            return [
+                'error' => $errorMessage,
+                'code' => $errorCode,
+            ];
+        }
     }
 
     /**
