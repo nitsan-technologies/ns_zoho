@@ -80,7 +80,7 @@ class ApiFinisher extends AbstractFinisher
                 $queryBuilder
                     ->insert(self::INDEX_TABLE)
                     ->values($zohoContent)
-                    ->executeQuery();
+                    ->executeStatement();
 
             }
         } else {
@@ -298,10 +298,14 @@ class ApiFinisher extends AbstractFinisher
 
     public function generateRefreshToken($constant)
     {
-        $url = $constant['zohoAccountURL'] . "/oauth/v2/token?code=" . $constant['authtoken'] . "&client_id=" . $constant['client_id'] . "&client_secret=" . $constant['client_secret'] ."&grant_type=authorization_code";
+        $url = "https://accounts.zoho.com/oauth/v2/token?code=" . $constant['authtoken'] . "&client_id=" . $constant['client_id'] . "&client_secret=" . $constant['client_secret'] ."&grant_type=authorization_code";
         $requestFactory = GeneralUtility::makeInstance(RequestFactory::class);
         $finalRequest = $requestFactory->request($url, 'POST');
-        return json_decode($finalRequest->getBody()->getContents());
+        $response =json_decode($finalRequest->getBody()->getContents());
+        if (isset($response->error)){
+            throw new \Exception('Auth Token Expired');
+        }
+        return $response;
     }
 
     /**
