@@ -53,7 +53,7 @@ TYPO3:
             Text:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -61,7 +61,7 @@ TYPO3:
             Textarea:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -69,7 +69,7 @@ TYPO3:
             Email:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -78,7 +78,7 @@ TYPO3:
             Number:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -86,7 +86,7 @@ TYPO3:
             Telephone:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -94,7 +94,7 @@ TYPO3:
             Hidden:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -102,7 +102,7 @@ TYPO3:
             Url:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -110,7 +110,7 @@ TYPO3:
             Checkbox:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -124,7 +124,7 @@ TYPO3:
             MultiCheckbox:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -135,7 +135,7 @@ TYPO3:
             MultiSelect:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -145,7 +145,7 @@ TYPO3:
             RadioButton:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -156,7 +156,7 @@ TYPO3:
             SingleSelect:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -166,7 +166,7 @@ TYPO3:
             FileUpload:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value
@@ -176,7 +176,7 @@ TYPO3:
             ImageUpload:
               formEditor:
                 editors:
-                  600:
+                  700:
                     identifier: zohoValue
                     templateName: Inspector-TextEditor
                     label: Zoho Value

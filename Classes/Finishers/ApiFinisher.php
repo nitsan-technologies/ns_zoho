@@ -28,6 +28,7 @@ use TYPO3\CMS\Extbase\Domain\Model\FileReference;
 use TYPO3\CMS\Form\Domain\Model\FormElements\FileUpload;
 use TYPO3\CMS\Core\Http\RequestFactory;
 use TYPO3\CMS\Core\Database\Connection;
+use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
 
 class ApiFinisher extends AbstractFinisher
 {
@@ -54,9 +55,9 @@ class ApiFinisher extends AbstractFinisher
     {
         $formRuntime = $this->finisherContext->getFormRuntime();
         $refToken = '';
-
+        $matchingFormValues = [];
         // get configuration from extension manager
-        $constant = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nszoho.']['settings.'];
+        $constant = $this->getConstants();
         $availablefileds = $formRuntime->getFormState()->getFormValues();
         $resultExtensProperties = [];
 
@@ -65,9 +66,9 @@ class ApiFinisher extends AbstractFinisher
 
         $tokenResult = $this->tokenContent($constant, $queryBuilder);
 
-        if(count($tokenResult) == 0){
+        if(count($tokenResult) == 0) {
             $refreshTokenGenerate = $this->generateRefreshToken($constant);
-            if($refreshTokenGenerate->refresh_token){
+            if(isset($refreshTokenGenerate->refresh_token)) {
                 $refToken = $refreshTokenGenerate->refresh_token;
                 $zohoContent = [
                     'pid' => 0,
@@ -79,11 +80,10 @@ class ApiFinisher extends AbstractFinisher
                 $queryBuilder
                     ->insert(self::INDEX_TABLE)
                     ->values($zohoContent)
-                    ->execute();
+                    ->executeQuery();
 
             }
-        }
-        else {
+        } else {
             foreach ($tokenResult as $zoho) {
                 $refToken = $zoho['authtoken'];
             }
@@ -93,12 +93,12 @@ class ApiFinisher extends AbstractFinisher
         $auth = $refreshToken->access_token;
 
         foreach ($formRuntime->getFormDefinition()->getRenderablesRecursively() as $element) {
-            if($element->getType() != 'Page' && $element->getType() != 'GridRow' && $element->getType() != 'Fieldset' && $element->getType() != 'Checkbox' && $element->getType() != 'StaticText' && $element->getType() != 'Recaptcha' && $element->getType() != 'Honeypot'){
-                foreach($element->getRenderingOptions() as $key => $newProperties){
+            if($element->getType() != 'Page' && $element->getType() != 'GridRow' && $element->getType() != 'Fieldset' && $element->getType() != 'Checkbox' && $element->getType() != 'StaticText' && $element->getType() != 'Recaptcha' && $element->getType() != 'Honeypot') {
+                foreach($element->getRenderingOptions() as $key => $newProperties) {
 
-                    if($key == 'zohoValue'){
+                    if($key == 'zohoValue') {
 
-                        if(is_string($newProperties)){
+                        if(is_string($newProperties)) {
                             $resultExtensProperties[] = $newProperties;
                         }
 
@@ -120,9 +120,9 @@ class ApiFinisher extends AbstractFinisher
                         $fileName = $file->getName();
                     }
                 }
-                foreach($availablefileds as $key => $values){
-                    if($key == $element->getIdentifier()){
-                        if(is_array($values)){
+                foreach($availablefileds as $key => $values) {
+                    if($key == $element->getIdentifier()) {
+                        if(is_array($values)) {
                             $values = implode(', ', $values);
                         }
                         $matchingFormValues[$key] = $values;
@@ -132,14 +132,15 @@ class ApiFinisher extends AbstractFinisher
         }
 
         $finalResult = array_combine($resultExtensProperties, $matchingFormValues);
-
-        $replaceImgValue = array("Record_Image" => $fileName);
-        $finalResult = array_replace($finalResult,$replaceImgValue);
-        $zohoModule = 'Leads';
+        if (isset($fileName)) {
+            $replaceImgValue = array("Record_Image" => $fileName);
+            $finalResult = array_replace($finalResult, $replaceImgValue);
+            $zohoModule = 'Leads';
+        }
 
         $result = $this->postData($auth, $finalResult);
 
-        if($fileName) {
+        if(isset($fileName) && isset($folderName) && isset($zohoModule)) {
             $responseData = $result['data'][0];
             $details = $responseData['details'];
             $recordId = $details['id'];
@@ -161,14 +162,16 @@ class ApiFinisher extends AbstractFinisher
             ->from(self::INDEX_TABLE)
             ->where(
                 $queryBuilder->expr()->eq(
-                    'client_id', $queryBuilder->createNamedParameter($constant['client_id'], Connection::PARAM_STR)
+                    'client_id',
+                    $queryBuilder->createNamedParameter($constant['client_id'], Connection::PARAM_STR)
                 ),
                 $queryBuilder->expr()->eq(
-                    'client_secret', $queryBuilder->createNamedParameter($constant['client_secret'], Connection::PARAM_STR)
+                    'client_secret',
+                    $queryBuilder->createNamedParameter($constant['client_secret'], Connection::PARAM_STR)
                 )
             )
-            ->execute()
-            ->fetchAll();
+            ->executeQuery()
+            ->fetchAllAssociative();
     }
 
     /**
@@ -178,8 +181,7 @@ class ApiFinisher extends AbstractFinisher
      */
     public function postData($auth, $finalResult)
     {
-        $constant = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nszoho.']['settings.'];
-
+        $constant = $this->getConstants();
         $json = '{
                 "data":[
                 '.
@@ -195,12 +197,11 @@ class ApiFinisher extends AbstractFinisher
     /**
      * uploadFiles to CRM Module
      *
-     * @return void
      * @throws GuzzleException
      */
     public function uploadFile($attachType, $auth, $zohoModule, $folderName, $recordId, $sendyourdetail)
     {
-
+        $cfile = '';
         // Upload file to CRM module
         $target_dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/');
         $filename = $target_dir . $folderName . '/' . $sendyourdetail;
@@ -210,7 +211,7 @@ class ApiFinisher extends AbstractFinisher
         }
 
         // Path for uploadFiles to CRM module
-        $constant = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nszoho.']['settings.'];
+        $constant = $this->getConstants();
         $url = $constant['zohoURL']."/crm/v2/" . $zohoModule . "/" . $recordId . "/" . $attachType;
         $json = array("file" => $cfile);
 
@@ -298,7 +299,6 @@ class ApiFinisher extends AbstractFinisher
     public function generateRefreshToken($constant)
     {
         $url = $constant['zohoAccountURL'] . "/oauth/v2/token?code=" . $constant['authtoken'] . "&client_id=" . $constant['client_id'] . "&client_secret=" . $constant['client_secret'] ."&grant_type=authorization_code";
-
         $requestFactory = GeneralUtility::makeInstance(RequestFactory::class);
         $finalRequest = $requestFactory->request($url, 'POST');
         return json_decode($finalRequest->getBody()->getContents());
@@ -315,5 +315,10 @@ class ApiFinisher extends AbstractFinisher
         return json_decode($finalRequest->getBody()->getContents());
 
     }
-
+    public function getConstants()
+    {
+        $configurationManager = GeneralUtility::makeInstance(ConfigurationManagerInterface::class);
+        $typoScriptSetup = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+        return $typoScriptSetup['plugin.']['tx_nszoho.']['settings.'];
+    }
 }
