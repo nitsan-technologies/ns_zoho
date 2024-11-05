@@ -139,7 +139,17 @@ class ApiFinisher extends AbstractFinisher
         }
 
         $result = $this->postData($auth, $finalResult);
-
+        if (isset($result['data'][0]['status']) and $result['data'][0]['status'] == 'error') {
+            $message = $result['data'][0]['code'].': '.$result['data'][0]['message'];
+            if (!empty($result['data'][0]['details'])){
+                $message = $message.' ('.implode(', ', array_map(
+                        fn($key, $value) => "$key=$value",
+                        array_keys($result['data'][0]['details']),
+                        $result['data'][0]['details']
+                    )).' )';
+            }
+            echo '<script>alert("' . $message . '");</script>';
+        }
         if(isset($fileName) && isset($folderName) && isset($zohoModule)) {
             $responseData = $result['data'][0];
             $details = $responseData['details'];
@@ -249,7 +259,7 @@ class ApiFinisher extends AbstractFinisher
             $errorCode = $e->getCode();
 
             if ($e->hasResponse()) {
-                echo $e->getResponse()->getBody()->getContents();
+                echo '<script>alert("'. $e->getResponse()->getBody()->getContents().'");</script>';
             }
             return [
                 'error' => $errorMessage,
@@ -287,7 +297,7 @@ class ApiFinisher extends AbstractFinisher
             $errorCode = $e->getCode();
 
             if ($e->hasResponse()) {
-                echo $e->getResponse()->getBody()->getContents();
+                echo '<script>alert("'. $e->getResponse()->getBody()->getContents().'");</script>';
             }
             return [
                 'error' => $errorMessage,
@@ -303,7 +313,7 @@ class ApiFinisher extends AbstractFinisher
         $finalRequest = $requestFactory->request($url, 'POST');
         $response =json_decode($finalRequest->getBody()->getContents());
         if (isset($response->error)){
-            throw new \Exception('Auth Token Expired');
+            echo '<script>alert("Auth Token Expired");</script>';
         }
         return $response;
     }
