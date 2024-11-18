@@ -17,17 +17,18 @@ declare(strict_types=1);
 
 namespace Nitsan\NsZoho\Finishers;
 
-use Doctrine\DBAL\Driver\Exception;
 use GuzzleHttp\Client;
+use Doctrine\DBAL\Driver\Exception;
+use TYPO3\CMS\Core\Database\Connection;
+use TYPO3\CMS\Core\Http\RequestFactory;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
-use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Form\Domain\Finishers\AbstractFinisher;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Information\Typo3Version;
 use TYPO3\CMS\Extbase\Domain\Model\FileReference;
+use TYPO3\CMS\Form\Domain\Finishers\AbstractFinisher;
 use TYPO3\CMS\Form\Domain\Model\FormElements\FileUpload;
-use TYPO3\CMS\Core\Http\RequestFactory;
-use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
 
 class ApiFinisher extends AbstractFinisher
@@ -64,7 +65,11 @@ class ApiFinisher extends AbstractFinisher
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getQueryBuilderForTable(self::INDEX_TABLE);
 
-        $tokenResult = $this->tokenContent($constant, $queryBuilder);
+        if ((GeneralUtility::makeInstance(Typo3Version::class))->getMajorVersion() > 10) {
+            $tokenResult = $this->tokenContent($constant, $queryBuilder);
+        } else {
+            $tokenResult = $this->tokenContentV10($constant, $queryBuilder);
+        }
 
         if(count($tokenResult) == 0) {
             $refreshTokenGenerate = $this->generateRefreshToken($constant);
@@ -77,10 +82,17 @@ class ApiFinisher extends AbstractFinisher
                     'authtoken' => $refToken,
                 ];
 
-                $queryBuilder
-                    ->insert(self::INDEX_TABLE)
-                    ->values($zohoContent)
-                    ->executeStatement();
+                if ((GeneralUtility::makeInstance(Typo3Version::class))->getMajorVersion() > 10) {
+                    $queryBuilder
+                        ->insert(self::INDEX_TABLE)
+                        ->values($zohoContent)
+                        ->executeStatement();
+                } else {
+                    $queryBuilder
+                        ->insert(self::INDEX_TABLE)
+                        ->values($zohoContent)
+                        ->execute();
+                }
 
             }
         } else {
@@ -90,7 +102,7 @@ class ApiFinisher extends AbstractFinisher
         }
 
         $refreshToken = $this->generateNewAccessToken($constant, $refToken);
-        $auth = $refreshToken->access_token;
+        $auth = $refreshToken->access_token ?? '';
 
         foreach ($formRuntime->getFormDefinition()->getRenderablesRecursively() as $element) {
             if($element->getType() != 'Page' && $element->getType() != 'GridRow' && $element->getType() != 'Fieldset' && $element->getType() != 'Checkbox' && $element->getType() != 'StaticText' && $element->getType() != 'Recaptcha' && $element->getType() != 'Honeypot') {
@@ -182,6 +194,24 @@ class ApiFinisher extends AbstractFinisher
             )
             ->executeQuery()
             ->fetchAllAssociative();
+    }
+    public function tokenContentV10($constant, $queryBuilder): array
+    {
+        return $queryBuilder
+            ->select('*')
+            ->from(self::INDEX_TABLE)
+            ->where(
+                $queryBuilder->expr()->eq(
+                    'client_id',
+                    $queryBuilder->createNamedParameter($constant['client_id'], Connection::PARAM_STR)
+                ),
+                $queryBuilder->expr()->eq(
+                    'client_secret',
+                    $queryBuilder->createNamedParameter($constant['client_secret'], Connection::PARAM_STR)
+                )
+            )
+            ->execute()
+            ->fetchAll();
     }
 
     /**
@@ -313,7 +343,7 @@ class ApiFinisher extends AbstractFinisher
         $finalRequest = $requestFactory->request($url, 'POST');
         $response =json_decode($finalRequest->getBody()->getContents());
         if (isset($response->error)){
-            echo '<script>alert("Auth Token Expired");</script>';
+            echo '<script>alert("Zoho Auth Token Expired!");</script>';
         }
         return $response;
     }
@@ -322,17 +352,25 @@ class ApiFinisher extends AbstractFinisher
      */
     public function generateNewAccessToken($constant, $newRefreshToken)
     {
-        $url = $constant['zohoAccountURL'] . "/oauth/v2/token?refresh_token=" . $newRefreshToken ."&client_id=" . $constant['client_id'] . "&client_secret=" . $constant['client_secret'] ."&grant_type=refresh_token";
+        try {
+            $url = $constant['zohoAccountURL'] . "/oauth/v2/token?refresh_token=" . $newRefreshToken ."&client_id=" . $constant['client_id'] . "&client_secret=" . $constant['client_secret'] ."&grant_type=refresh_token";
 
-        $requestFactory = GeneralUtility::makeInstance(RequestFactory::class);
-        $finalRequest = $requestFactory->request($url, 'POST');
-        return json_decode($finalRequest->getBody()->getContents());
+            $requestFactory = GeneralUtility::makeInstance(RequestFactory::class);
+            $finalRequest = $requestFactory->request($url, 'POST');
+            return json_decode($finalRequest->getBody()->getContents());
+        } catch (RequestException $e) {
+            return false;
+        }
 
     }
     public function getConstants()
     {
-        $configurationManager = GeneralUtility::makeInstance(ConfigurationManagerInterface::class);
-        $typoScriptSetup = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
-        return $typoScriptSetup['plugin.']['tx_nszoho.']['settings.'];
+        if ((GeneralUtility::makeInstance(Typo3Version::class))->getMajorVersion() > 10) {
+            $configurationManager = GeneralUtility::makeInstance(ConfigurationManagerInterface::class);
+            $typoScriptSetup = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            return $typoScriptSetup['plugin.']['tx_nszoho.']['settings.'];
+        } else {
+            return $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nszoho.']['settings.'];
+        }
     }
 }
