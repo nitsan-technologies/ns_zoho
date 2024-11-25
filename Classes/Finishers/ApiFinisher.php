@@ -160,7 +160,16 @@ class ApiFinisher extends AbstractFinisher
                         $result['data'][0]['details']
                     )).' )';
             }
-            echo '<script>alert("' . $message . '");</script>';
+            
+            $uid = $GLOBALS['TSFE']->id;
+            $redirectUri = $this->getRedirectUri($uid);
+            echo '<script>
+                alert("' . $message . '");
+                setTimeout(function() {
+                    window.location.href = "' . $redirectUri . '";
+                }, 100); // Delay for 100ms
+            </script>';
+            die;
         }
         if(isset($fileName) && isset($folderName) && isset($zohoModule)) {
             $responseData = $result['data'][0];
@@ -289,7 +298,15 @@ class ApiFinisher extends AbstractFinisher
             $errorCode = $e->getCode();
 
             if ($e->hasResponse()) {
-                echo '<script>alert("'. $e->getResponse()->getBody()->getContents().'");</script>';
+                $uid = $GLOBALS['TSFE']->id;
+                $redirectUri = $this->getRedirectUri($uid);
+                echo '<script>
+                    alert("' . $e->getResponse()->getBody()->getContents() . '");
+                    setTimeout(function() {
+                        window.location.href = "' . $redirectUri . '";
+                    }, 100); // Delay for 100ms
+                </script>';
+                die;
             }
             return [
                 'error' => $errorMessage,
@@ -327,7 +344,15 @@ class ApiFinisher extends AbstractFinisher
             $errorCode = $e->getCode();
 
             if ($e->hasResponse()) {
-                echo '<script>alert("'. $e->getResponse()->getBody()->getContents().'");</script>';
+                $uid = $GLOBALS['TSFE']->id;
+                $redirectUri = $this->getRedirectUri($uid);
+                echo '<script>
+                    alert("' . $e->getResponse()->getBody()->getContents() . '");
+                    setTimeout(function() {
+                        window.location.href = "' . $redirectUri . '";
+                    }, 100); // Delay for 100ms
+                </script>';
+                die;
             }
             return [
                 'error' => $errorMessage,
@@ -343,7 +368,15 @@ class ApiFinisher extends AbstractFinisher
         $finalRequest = $requestFactory->request($url, 'POST');
         $response =json_decode($finalRequest->getBody()->getContents());
         if (isset($response->error)){
-            echo '<script>alert("Zoho Auth Token Expired!");</script>';
+            $uid = $GLOBALS['TSFE']->id;
+            $redirectUri = $this->getRedirectUri($uid);
+            echo '<script>
+                alert("Zoho Auth Token Expired!");
+                setTimeout(function() {
+                    window.location.href = "' . $redirectUri . '";
+                }, 100); // Delay for 100ms
+            </script>';
+            die;
         }
         return $response;
     }
@@ -373,4 +406,14 @@ class ApiFinisher extends AbstractFinisher
             return $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nszoho.']['settings.'];
         }
     }
+    public function getRedirectUri($uid): string
+    {
+        $typoScriptFrontendController = $GLOBALS['TSFE'];
+        $typoLinkConfig = [
+            'parameter' => $uid,
+        ];
+        $url = $typoScriptFrontendController->cObj->typoLink_URL($typoLinkConfig);
+        return GeneralUtility::locationHeaderUrl($url);
+    }
+
 }
