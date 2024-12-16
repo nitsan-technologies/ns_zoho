@@ -110,7 +110,8 @@ class ApiFinisher extends AbstractFinisher
 
                     if($key == 'zohoValue') {
 
-                        if(is_string($newProperties)) {
+                        if(is_string($newProperties) && !empty($newProperties)) {
+                            $array[] = $element->getIdentifier();
                             $resultExtensProperties[] = $newProperties;
                         }
 
@@ -137,10 +138,14 @@ class ApiFinisher extends AbstractFinisher
                         if(is_array($values)) {
                             $values = implode(', ', $values);
                         }
-                        $matchingFormValues[$key] = $values;
+                        $newArray[$key] = $values;
                     }
                 }
             }
+        }
+
+        foreach ($array as $key) {
+            $matchingFormValues[$key] = $newArray[$key];
         }
 
         $finalResult = array_combine($resultExtensProperties, $matchingFormValues);
