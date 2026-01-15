@@ -24,6 +24,18 @@ TYPO3:
                       10:
                         value: Leads
                         label: 'Leads'
+                      20:
+                        value: Contacts
+                        label: 'Contacts'
+                      30:
+                        value: Career
+                        label: 'Career'
+                      40:
+                        value: Accounts
+                        label: 'Accounts'
+                      50:
+                        value: Products
+                        label: 'Products'
                   900:
                     selectOptions:
                       1560425499:
@@ -40,7 +52,7 @@ TYPO3:
                           label: Zoho CRM Finisher
                         9999:
                           identifier: removeButton
-                          templateName: Inspector-RemoveElementEditor        
+                          templateName: Inspector-RemoveElementEditor
               renderingOptions:
                 translation:
                   translationFile:
@@ -53,6 +65,7 @@ TYPO3:
                     templateName: Inspector-TextEditor
                     label: Zoho Value
                     propertyPath: renderingOptions.zohoValue
+                
             Textarea:
               formEditor:
                 editors:
@@ -61,6 +74,7 @@ TYPO3:
                     templateName: Inspector-TextEditor
                     label: Zoho Value
                     propertyPath: renderingOptions.zohoValue
+                
             Email:
               formEditor:
                 editors:
@@ -78,6 +92,7 @@ TYPO3:
                     templateName: Inspector-TextEditor
                     label: Zoho Value
                     propertyPath: renderingOptions.zohoValue
+                
             Telephone:
               formEditor:
                 editors:
