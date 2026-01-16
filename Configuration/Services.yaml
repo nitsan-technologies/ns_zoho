@@ -7,16 +7,3 @@ services:
   Nitsan\NsZoho\:
     resource: '../Classes/*'
 
-  Nitsan\NsZoho\Setup:
-    tags:
-      - name: event.listener
-        identifier: 'ns-zoho'
-        method: 'executeOnSignal'
-        event: TYPO3\CMS\Core\Package\Event\AfterPackageActivationEvent
-
-  Nitsan\NsZoho\Event\BackendUserLogin:
-    tags:
-      - name: event.listener
-        identifier: 'ns-zoho-backend-login'
-        method: 'dispatch'
-        event: TYPO3\CMS\Core\Authentication\Event\AfterUserLoggedInEvent
