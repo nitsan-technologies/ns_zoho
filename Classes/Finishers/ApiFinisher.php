@@ -17,19 +17,19 @@ declare(strict_types=1);
 
 namespace Nitsan\NsZoho\Finishers;
 
-use GuzzleHttp\Client;
 use Doctrine\DBAL\Driver\Exception;
-use TYPO3\CMS\Core\Database\Connection;
-use TYPO3\CMS\Core\Http\RequestFactory;
+use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
-use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Http\RequestFactory;
 use TYPO3\CMS\Core\Information\Typo3Version;
-use TYPO3\CMS\Extbase\Domain\Model\FileReference;
-use TYPO3\CMS\Form\Domain\Finishers\AbstractFinisher;
-use TYPO3\CMS\Form\Domain\Model\FormElements\FileUpload;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
+use TYPO3\CMS\Form\Domain\Finishers\AbstractFinisher;
+use TYPO3\CMS\Extbase\Domain\Model\FileReference;
+use TYPO3\CMS\Form\Domain\Model\FormElements\FileUpload;
 
 class ApiFinisher extends AbstractFinisher
 {
@@ -47,12 +47,11 @@ class ApiFinisher extends AbstractFinisher
 
     /**
      * Executes this finisher
-     * @throws GuzzleException
      * @throws Exception
      * @see AbstractFinisher::execute()
      *
      */
-    protected function executeInternal(): void
+    protected function executeInternal()
     {
         $formRuntime = $this->finisherContext->getFormRuntime();
         $refToken = '';
@@ -71,7 +70,7 @@ class ApiFinisher extends AbstractFinisher
             $tokenResult = $this->tokenContentV10($constant, $queryBuilder);
         }
 
-        if(count($tokenResult) == 0) {
+        if (count($tokenResult) == 0) {
             $refreshTokenGenerate = $this->generateRefreshToken($constant);
             if(isset($refreshTokenGenerate->refresh_token)) {
                 $refToken = $refreshTokenGenerate->refresh_token;
@@ -81,7 +80,6 @@ class ApiFinisher extends AbstractFinisher
                     'client_secret' => $constant['client_secret'],
                     'authtoken' => $refToken,
                 ];
-
                 if ((GeneralUtility::makeInstance(Typo3Version::class))->getMajorVersion() > 10) {
                     $queryBuilder
                         ->insert(self::INDEX_TABLE)
@@ -93,8 +91,8 @@ class ApiFinisher extends AbstractFinisher
                         ->values($zohoContent)
                         ->execute();
                 }
-
             }
+
         } else {
             foreach ($tokenResult as $zoho) {
                 $refToken = $zoho['authtoken'];
@@ -107,9 +105,7 @@ class ApiFinisher extends AbstractFinisher
         foreach ($formRuntime->getFormDefinition()->getRenderablesRecursively() as $element) {
             if($element->getType() != 'Page' && $element->getType() != 'GridRow' && $element->getType() != 'Fieldset' && $element->getType() != 'Checkbox' && $element->getType() != 'StaticText' && $element->getType() != 'Recaptcha' && $element->getType() != 'Honeypot') {
                 foreach($element->getRenderingOptions() as $key => $newProperties) {
-
                     if($key == 'zohoValue') {
-
                         if(is_string($newProperties) && !empty($newProperties)) {
                             $array[] = $element->getIdentifier();
                             $resultExtensProperties[] = $newProperties;
@@ -133,9 +129,9 @@ class ApiFinisher extends AbstractFinisher
                         $fileName = $file->getName();
                     }
                 }
-                foreach($availablefileds as $key => $values) {
-                    if($key == $element->getIdentifier()) {
-                        if(is_array($values)) {
+                foreach ($availablefileds as $key => $values) {
+                    if ($key == $element->getIdentifier()) {
+                        if (is_array($values)) {
                             $values = implode(', ', $values);
                         }
                         $newArray[$key] = $values;
@@ -143,19 +139,20 @@ class ApiFinisher extends AbstractFinisher
                 }
             }
         }
-
+        $matchingFormValues = [];
         foreach ($array as $key) {
             $matchingFormValues[$key] = $newArray[$key];
         }
-
         $finalResult = array_combine($resultExtensProperties, $matchingFormValues);
+
         if (isset($fileName)) {
             $replaceImgValue = array("Record_Image" => $fileName);
             $finalResult = array_replace($finalResult, $replaceImgValue);
-            $zohoModule = 'Leads';
         }
+        $zohoModule = $formRuntime->getFormDefinition()->getRenderingOptions()['zohomodule'] ?? 'Leads';
 
-        $result = $this->postData($auth, $finalResult);
+        // postData to CRM module
+        $result = $this->postData($auth, $finalResult, $zohoModule);
         if (isset($result['data'][0]['status']) and $result['data'][0]['status'] == 'error') {
             $message = $result['data'][0]['code'].': '.$result['data'][0]['message'];
             if (!empty($result['data'][0]['details'])){
@@ -165,18 +162,18 @@ class ApiFinisher extends AbstractFinisher
                         $result['data'][0]['details']
                     )).' )';
             }
-            
             $uid = $GLOBALS['TSFE']->id;
             $redirectUri = $this->getRedirectUri($uid);
             echo '<script>
-                alert("' . $message . '");
+                alert("' . addslashes($message) . '");
                 setTimeout(function() {
                     window.location.href = "' . $redirectUri . '";
                 }, 100); // Delay for 100ms
             </script>';
-            die;
+            exit;
         }
-        if(isset($fileName) && isset($folderName) && isset($zohoModule)) {
+
+        if (isset($fileName) && isset($folderName)) {
             $responseData = $result['data'][0];
             $details = $responseData['details'];
             $recordId = $details['id'];
@@ -203,12 +200,16 @@ class ApiFinisher extends AbstractFinisher
                 ),
                 $queryBuilder->expr()->eq(
                     'client_secret',
-                    $queryBuilder->createNamedParameter($constant['client_secret'], Connection::PARAM_STR)
+                    $queryBuilder->createNamedParameter(
+                        $constant['client_secret'],
+                        Connection::PARAM_STR
+                    )
                 )
             )
             ->executeQuery()
             ->fetchAllAssociative();
     }
+
     public function tokenContentV10($constant, $queryBuilder): array
     {
         return $queryBuilder
@@ -221,7 +222,10 @@ class ApiFinisher extends AbstractFinisher
                 ),
                 $queryBuilder->expr()->eq(
                     'client_secret',
-                    $queryBuilder->createNamedParameter($constant['client_secret'], Connection::PARAM_STR)
+                    $queryBuilder->createNamedParameter(
+                        $constant['client_secret'],
+                        Connection::PARAM_STR
+                    )
                 )
             )
             ->execute()
@@ -231,30 +235,31 @@ class ApiFinisher extends AbstractFinisher
     /**
      * postData to CRM Module
      *
-     * @throws GuzzleException
      */
-    public function postData($auth, $finalResult)
+    public function postData($auth, $finalResult, $zohoModule)
     {
         $constant = $this->getConstants();
+
         $json = '{
                 "data":[
-                '.
+                ' .
             json_encode($finalResult)
-            .'
+            . '
             ]
         }';
 
         // curl configuration for postData
-        return $this->getCurl($constant, $json, $auth);
+        return $this->getCurl($constant, $json, $auth, $zohoModule);
     }
 
     /**
      * uploadFiles to CRM Module
      *
-     * @throws GuzzleException
+     * @return bool|string
      */
     public function uploadFile($attachType, $auth, $zohoModule, $folderName, $recordId, $sendyourdetail)
     {
+
         $cfile = '';
         // Upload file to CRM module
         $target_dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/');
@@ -301,12 +306,12 @@ class ApiFinisher extends AbstractFinisher
         } catch (RequestException $e) {
             $errorMessage = $e->getMessage();
             $errorCode = $e->getCode();
-
-            if ($e->hasResponse()) {
+            $status = json_decode($e->getResponse()->getBody()->getContents(), true);
+            if ($status['status'] == 'error') {
                 $uid = $GLOBALS['TSFE']->id;
                 $redirectUri = $this->getRedirectUri($uid);
                 echo '<script>
-                    alert("' . $e->getResponse()->getBody()->getContents() . '");
+                    alert("' . addslashes($status['code'] .': '.$status['message']) . '");
                     setTimeout(function() {
                         window.location.href = "' . $redirectUri . '";
                     }, 100); // Delay for 100ms
@@ -318,15 +323,13 @@ class ApiFinisher extends AbstractFinisher
                 'code' => $errorCode,
             ];
         }
+
+
     }
 
-    /**
-     * @throws GuzzleException
-     */
-    public function getCurl($constant, $data, $auth)
+    public function getCurl($constant, $data, $auth, $zohoModule)
     {
-
-        $apiURL = $constant['zohoURL'] . '/crm/v2/Leads';
+        $apiURL = $constant['zohoURL'] . '/crm/v2/'. $zohoModule;
 
         $client = new Client();
 
@@ -348,17 +351,19 @@ class ApiFinisher extends AbstractFinisher
             $errorMessage = $e->getMessage();
             $errorCode = $e->getCode();
 
-            if ($e->hasResponse()) {
+            $status = json_decode($e->getResponse()->getBody()->getContents(), true);
+            if ($status['status'] == 'error') {
                 $uid = $GLOBALS['TSFE']->id;
                 $redirectUri = $this->getRedirectUri($uid);
                 echo '<script>
-                    alert("' . $e->getResponse()->getBody()->getContents() . '");
+                    alert("' . addslashes($status['code'] .': '.$status['message']) . '");
                     setTimeout(function() {
                         window.location.href = "' . $redirectUri . '";
                     }, 100); // Delay for 100ms
                 </script>';
                 die;
             }
+
             return [
                 'error' => $errorMessage,
                 'code' => $errorCode,
@@ -368,30 +373,22 @@ class ApiFinisher extends AbstractFinisher
 
     public function generateRefreshToken($constant)
     {
-        $url = "https://accounts.zoho.com/oauth/v2/token?code=" . $constant['authtoken'] . "&client_id=" . $constant['client_id'] . "&client_secret=" . $constant['client_secret'] ."&grant_type=authorization_code";
+        $url = $constant['zohoAccountURL'] . "/oauth/v2/token?code=" . $constant['authtoken'] . "&client_id=" . $constant['client_id'] . "&client_secret=" . $constant['client_secret'] . "&grant_type=authorization_code";
+
         $requestFactory = GeneralUtility::makeInstance(RequestFactory::class);
         $finalRequest = $requestFactory->request($url, 'POST');
-        $response =json_decode($finalRequest->getBody()->getContents());
-        if (isset($response->error)){
-            $uid = $GLOBALS['TSFE']->id;
-            $redirectUri = $this->getRedirectUri($uid);
-            echo '<script>
-                alert("Zoho Auth Token Expired!");
-                setTimeout(function() {
-                    window.location.href = "' . $redirectUri . '";
-                }, 100); // Delay for 100ms
-            </script>';
-            die;
+        $response = json_decode($finalRequest->getBody()->getContents());
+        if (isset($response->error)) {
+            echo '<script>alert("Please review your Zoho configuration to ensure it\'s set up correctly.");</script>';
         }
         return $response;
+
     }
 
-    /**
-     */
     public function generateNewAccessToken($constant, $newRefreshToken)
     {
         try {
-            $url = $constant['zohoAccountURL'] . "/oauth/v2/token?refresh_token=" . $newRefreshToken ."&client_id=" . $constant['client_id'] . "&client_secret=" . $constant['client_secret'] ."&grant_type=refresh_token";
+            $url = $constant['zohoAccountURL'] . "/oauth/v2/token?refresh_token=" . $newRefreshToken . "&client_id=" . $constant['client_id'] . "&client_secret=" . $constant['client_secret'] . "&grant_type=refresh_token";
 
             $requestFactory = GeneralUtility::makeInstance(RequestFactory::class);
             $finalRequest = $requestFactory->request($url, 'POST');
@@ -399,7 +396,6 @@ class ApiFinisher extends AbstractFinisher
         } catch (RequestException $e) {
             return false;
         }
-
     }
     public function getConstants()
     {
@@ -411,6 +407,7 @@ class ApiFinisher extends AbstractFinisher
             return $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nszoho.']['settings.'];
         }
     }
+
     public function getRedirectUri($uid): string
     {
         $typoScriptFrontendController = $GLOBALS['TSFE'];
@@ -420,5 +417,4 @@ class ApiFinisher extends AbstractFinisher
         $url = $typoScriptFrontendController->cObj->typoLink_URL($typoLinkConfig);
         return GeneralUtility::locationHeaderUrl($url);
     }
-
 }
