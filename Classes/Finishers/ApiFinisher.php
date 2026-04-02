@@ -30,6 +30,8 @@ use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
 use TYPO3\CMS\Form\Domain\Finishers\AbstractFinisher;
 use TYPO3\CMS\Extbase\Domain\Model\FileReference;
 use TYPO3\CMS\Form\Domain\Model\FormElements\FileUpload;
+use TYPO3\CMS\Frontend\Page\PageInformation;
+use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
 
 class ApiFinisher extends AbstractFinisher
 {
@@ -162,7 +164,11 @@ class ApiFinisher extends AbstractFinisher
                         $result['data'][0]['details']
                     )).' )';
             }
+            if ((GeneralUtility::makeInstance(Typo3Version::class))->getMajorVersion() >= 13) {
+            $uid = $this->request->getAttribute('frontend.page.information')->getId();
+        } else {
             $uid = $GLOBALS['TSFE']->id;
+        }
             $redirectUri = $this->getRedirectUri($uid);
             echo '<script>
                 alert("' . addslashes($message) . '");
@@ -308,7 +314,11 @@ class ApiFinisher extends AbstractFinisher
             $errorCode = $e->getCode();
             $status = json_decode($e->getResponse()->getBody()->getContents(), true);
             if ($status['status'] == 'error') {
+                if ((GeneralUtility::makeInstance(Typo3Version::class))->getMajorVersion() >= 13) {
+                $uid = $this->request->getAttribute('frontend.page.information')->getId();
+            } else {
                 $uid = $GLOBALS['TSFE']->id;
+            }
                 $redirectUri = $this->getRedirectUri($uid);
                 echo '<script>
                     alert("' . addslashes($status['code'] .': '.$status['message']) . '");
@@ -353,7 +363,11 @@ class ApiFinisher extends AbstractFinisher
 
             $status = json_decode($e->getResponse()->getBody()->getContents(), true);
             if ($status['status'] == 'error') {
+                if ((GeneralUtility::makeInstance(Typo3Version::class))->getMajorVersion() >= 13) {
+                $uid = $this->request->getAttribute('frontend.page.information')->getId();
+            } else {
                 $uid = $GLOBALS['TSFE']->id;
+            }
                 $redirectUri = $this->getRedirectUri($uid);
                 echo '<script>
                     alert("' . addslashes($status['code'] .': '.$status['message']) . '");
@@ -404,17 +418,27 @@ class ApiFinisher extends AbstractFinisher
             $typoScriptSetup = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
             return $typoScriptSetup['plugin.']['tx_nszoho.']['settings.'];
         } else {
-            return $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nszoho.']['settings.'];
-        }
-    }
+                if ((GeneralUtility::makeInstance(Typo3Version::class))->getMajorVersion() >= 13) {
+                    $request = $GLOBALS['TYPO3_REQUEST'];
+                    $configurationManager = GeneralUtility::makeInstance(ConfigurationManagerInterface::class);
+                    return $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT)['plugin.']['tx_nszoho.']['settings.'];
+                } else {
+                    return $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nszoho.']['settings.'];
+                }
+                    }
+                }
 
     public function getRedirectUri($uid): string
-    {
-        $typoScriptFrontendController = $GLOBALS['TSFE'];
-        $typoLinkConfig = [
-            'parameter' => $uid,
-        ];
-        $url = $typoScriptFrontendController->cObj->typoLink_URL($typoLinkConfig);
-        return GeneralUtility::locationHeaderUrl($url);
+{
+    $typoLinkConfig = [
+        'parameter' => $uid,
+    ];
+    if ((GeneralUtility::makeInstance(Typo3Version::class))->getMajorVersion() >= 13) {
+        $contentObject = GeneralUtility::makeInstance(ContentObjectRenderer::class);
+        $url = $contentObject->typoLink_URL($typoLinkConfig);
+    } else {
+        $url = $GLOBALS['TSFE']->cObj->typoLink_URL($typoLinkConfig);
     }
+    return GeneralUtility::locationHeaderUrl($url);
+}
 }
