@@ -8,16 +8,16 @@ categories:
 
 settings:
   plugin.tx_nszoho.settings.zohoURL:
-    label: Zoho API URL (e.g. https://www.zohoapis.in)
+    label: Zoho API URL (e.g. https://www.zohoapis.com)
     category: nszoho.general
     type: string
-    default: 'https://www.zohoapis.in'
+    default: 'https://www.zohoapis.com'
 
   plugin.tx_nszoho.settings.zohoAccountURL:
-    label: Zoho Accounts URL (e.g. https://accounts.zoho.in)
+    label: Zoho Accounts URL (e.g. https://accounts.zoho.com)
     category: nszoho.general
     type: string
-    default: 'https://accounts.zoho.in'
+    default: 'https://accounts.zoho.com'
 
   plugin.tx_nszoho.settings.authtoken:
     label: Auth code / refresh token
