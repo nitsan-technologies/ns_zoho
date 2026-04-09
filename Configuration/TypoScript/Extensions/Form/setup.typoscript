@@ -7,3 +7,10 @@ plugin.tx_form.settings.yamlConfigurations {
 module.tx_form.settings.yamlConfigurations {
     104 = EXT:ns_zoho/Configuration/Form/setup.yaml
 }
+plugin.tx_form {
+    settings {
+        yamlConfigurations {
+            100 = EXT:ns_zoho/Configuration/Form/setup.yaml
+        }
+    }
+}

@@ -1,0 +1,38 @@
+categories:
+  nszoho:
+    label: NS Zoho Settings
+
+  nszoho.general:
+    label: Zoho CRM Configuration
+    parent: nszoho
+
+settings:
+  plugin.tx_nszoho.settings.zohoURL:
+    label: Zoho API URL (e.g. https://www.zohoapis.com)
+    category: nszoho.general
+    type: string
+    default: 'https://www.zohoapis.com'
+
+  plugin.tx_nszoho.settings.zohoAccountURL:
+    label: Zoho Accounts URL (e.g. https://accounts.zoho.com)
+    category: nszoho.general
+    type: string
+    default: 'https://accounts.zoho.com'
+
+  plugin.tx_nszoho.settings.authtoken:
+    label: Auth code / refresh token
+    category: nszoho.general
+    type: string
+    default: ''
+
+  plugin.tx_nszoho.settings.client_id:
+    label: Client ID
+    category: nszoho.general
+    type: string
+    default: ''
+
+  plugin.tx_nszoho.settings.client_secret:
+    label: Client Secret
+    category: nszoho.general
+    type: string
+    default: ''
