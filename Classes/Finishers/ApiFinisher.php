@@ -148,7 +148,7 @@ class ApiFinisher extends AbstractFinisher
             $finalResult = array_replace($finalResult, ['Record_Image' => $fileName]);
         }
 
-        $zohoModule = $formRuntime->getFormDefinition()->getRenderingOptions()['zohomodule'] ?? 'Leads';
+        $zohoModule = 'Leads';
         $result = $this->postData($auth, $finalResult, $zohoModule);
 
         if (isset($result['data'][0]['status']) && $result['data'][0]['status'] === 'error') {
