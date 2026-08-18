@@ -18,6 +18,9 @@
 			<trans-unit id="settings.client_secret" xml:space="preserve">
 				<source>Client Secret</source>
 			</trans-unit>
+			<trans-unit id="settings.redirect_uri" xml:space="preserve">
+				<source>Redirect URI (required for Server-based OAuth apps; leave empty for Self Client)</source>
+			</trans-unit>
 		</body>
 	</file>
 </xliff>

@@ -5,11 +5,13 @@ plugin.tx_nszoho {
         # cat=plugin.tx_nszoho/100/2; type=string; label=LLL:EXT:ns_zoho/Resources/Private/Language/locallang.xlf:settings.zohoAccountURL
         zohoAccountURL = https://accounts.zoho.com
         # cat=plugin.tx_nszoho/100/3; type=string; label=LLL:EXT:ns_zoho/Resources/Private/Language/locallang.xlf:settings.authtoken
-        authtoken = authtoken
+        authtoken =
         # cat=plugin.tx_nszoho/100/4; type=string; label=LLL:EXT:ns_zoho/Resources/Private/Language/locallang.xlf:settings.client_id
         client_id =
         # cat=plugin.tx_nszoho/100/5; type=string; label=LLL:EXT:ns_zoho/Resources/Private/Language/locallang.xlf:settings.client_secret
         client_secret =
+        # cat=plugin.tx_nszoho/100/6; type=string; label=LLL:EXT:ns_zoho/Resources/Private/Language/locallang.xlf:settings.redirect_uri
+        redirect_uri =
     }
 
 }

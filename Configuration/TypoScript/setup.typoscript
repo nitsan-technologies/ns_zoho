@@ -8,5 +8,6 @@ plugin.tx_nszoho {
         authtoken = {$plugin.tx_nszoho.settings.authtoken}
         client_id = {$plugin.tx_nszoho.settings.client_id}
         client_secret = {$plugin.tx_nszoho.settings.client_secret}
+        redirect_uri = {$plugin.tx_nszoho.settings.redirect_uri}
     }
 }
