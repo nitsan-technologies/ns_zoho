@@ -1,0 +1,6 @@
+name: nitsan/ns-zoho-form
+label: 'Zoho CRM Form Finishers'
+priority: 200
+
+imports:
+  - { resource: 'EXT:ns_zoho/Configuration/Form/setup.yaml' }
