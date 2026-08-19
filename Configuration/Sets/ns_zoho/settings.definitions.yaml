@@ -36,3 +36,9 @@ settings:
     category: nszoho.general
     type: string
     default: ''
+
+  plugin.tx_nszoho.settings.redirect_uri:
+    label: Redirect URI (required for Server-based OAuth apps; leave empty for Self Client)
+    category: nszoho.general
+    type: string
+    default: ''

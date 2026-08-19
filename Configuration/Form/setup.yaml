@@ -24,18 +24,6 @@ TYPO3:
                       10:
                         value: Leads
                         label: 'Leads'
-                      20:
-                        value: Contacts
-                        label: 'Contacts'
-                      30:
-                        value: Career
-                        label: 'Career'
-                      40:
-                        value: Accounts
-                        label: 'Accounts'
-                      50:
-                        value: Products
-                        label: 'Products'
                   900:
                     selectOptions:
                       1560425499:

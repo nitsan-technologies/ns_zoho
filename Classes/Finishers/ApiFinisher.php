@@ -72,20 +72,23 @@ class ApiFinisher extends AbstractFinisher
         if (count($tokenResult) === 0) {
             $refreshTokenGenerate = $this->generateRefreshToken($constant);
             if (isset($refreshTokenGenerate->refresh_token)) {
-                $refToken    = $refreshTokenGenerate->refresh_token;
-                $zohoContent = [
-                    'pid'           => 0,
-                    'client_id'     => $constant['client_id'],
-                    'client_secret' => $constant['client_secret'],
-                    'authtoken'     => $refToken,
-                ];
-                // Use a fresh queryBuilder for insert
-                $insertQb = GeneralUtility::makeInstance(ConnectionPool::class)
-                    ->getQueryBuilderForTable(self::INDEX_TABLE);
-                $insertQb
-                    ->insert(self::INDEX_TABLE)
-                    ->values($zohoContent)
-                    ->executeStatement();
+                $refToken = $refreshTokenGenerate->refresh_token;
+                $this->persistRefreshToken($constant, $refToken);
+            } elseif (!empty($constant['authtoken'])) {
+                // Site setting may already contain a refresh token instead of a one-time grant code.
+                $probe = $this->generateNewAccessToken($constant, (string)$constant['authtoken']);
+                if (!empty($probe?->access_token)) {
+                    $refToken = (string)$constant['authtoken'];
+                    $this->persistRefreshToken($constant, $refToken);
+                } else {
+                    $this->alertAndStop(
+                        'Zoho OAuth error: ' . (string)($refreshTokenGenerate->error ?? $probe?->error ?? 'invalid configuration')
+                    );
+                }
+            } else {
+                $this->alertAndStop(
+                    'Zoho OAuth error: ' . (string)($refreshTokenGenerate->error ?? 'missing configuration')
+                );
             }
         } else {
             foreach ($tokenResult as $zoho) {
@@ -95,6 +98,12 @@ class ApiFinisher extends AbstractFinisher
 
         $refreshToken = $this->generateNewAccessToken($constant, $refToken);
         $auth         = $refreshToken->access_token ?? '';
+
+        if ($auth === '') {
+            $this->alertAndStop(
+                'Zoho OAuth error: ' . (string)($refreshToken?->error ?? 'unable to generate access token')
+            );
+        }
 
         foreach ($formRuntime->getFormDefinition()->getRenderablesRecursively() as $element) {
             $skipTypes = ['Page', 'GridRow', 'Fieldset', 'Checkbox', 'StaticText', 'Recaptcha', 'Honeypot'];
@@ -148,7 +157,10 @@ class ApiFinisher extends AbstractFinisher
             $finalResult = array_replace($finalResult, ['Record_Image' => $fileName]);
         }
 
-        $zohoModule = $formRuntime->getFormDefinition()->getRenderingOptions()['zohomodule'] ?? 'Leads';
+        $zohoModule = (string)($formRuntime->getFormDefinition()->getRenderingOptions()['zohomodule'] ?? 'Leads');
+        if ($zohoModule === '') {
+            $zohoModule = 'Leads';
+        }
         $result = $this->postData($auth, $finalResult, $zohoModule);
 
         if (isset($result['data'][0]['status']) && $result['data'][0]['status'] === 'error') {
@@ -344,22 +356,28 @@ class ApiFinisher extends AbstractFinisher
      */
     public function generateRefreshToken(array $constant): object
     {
-        $url = $constant['zohoAccountURL']
-            . '/oauth/v2/token?code=' . $constant['authtoken']
-            . '&client_id=' . $constant['client_id']
-            . '&client_secret=' . $constant['client_secret']
-            . '&grant_type=authorization_code';
-
-        $requestFactory = GeneralUtility::makeInstance(RequestFactory::class);
-        $response       = json_decode(
-            $requestFactory->request($url, 'POST')->getBody()->getContents()
-        );
-
-        if (isset($response->error)) {
-            echo '<script>alert("Please review your Zoho configuration to ensure it\'s set up correctly.");</script>';
+        $params = [
+            'code'          => (string)($constant['authtoken'] ?? ''),
+            'client_id'     => (string)($constant['client_id'] ?? ''),
+            'client_secret' => (string)($constant['client_secret'] ?? ''),
+            'grant_type'    => 'authorization_code',
+        ];
+        if (!empty($constant['redirect_uri'])) {
+            $params['redirect_uri'] = (string)$constant['redirect_uri'];
         }
 
-        return $response;
+        $url = rtrim((string)($constant['zohoAccountURL'] ?? ''), '/') . '/oauth/v2/token';
+
+        try {
+            $requestFactory = GeneralUtility::makeInstance(RequestFactory::class);
+            $response       = json_decode(
+                $requestFactory->request($url, 'POST', ['form_params' => $params])->getBody()->getContents()
+            );
+
+            return is_object($response) ? $response : (object)['error' => 'invalid_response'];
+        } catch (\Throwable $e) {
+            return (object)['error' => $e->getMessage()];
+        }
     }
 
     /**
@@ -367,35 +385,104 @@ class ApiFinisher extends AbstractFinisher
      */
     public function generateNewAccessToken(array $constant, string $newRefreshToken): ?object
     {
+        if ($newRefreshToken === '') {
+            return (object)['error' => 'missing_refresh_token'];
+        }
+
         try {
-            $url = $constant['zohoAccountURL']
-                . '/oauth/v2/token?refresh_token=' . $newRefreshToken
-                . '&client_id=' . $constant['client_id']
-                . '&client_secret=' . $constant['client_secret']
-                . '&grant_type=refresh_token';
+            $params = [
+                'refresh_token' => $newRefreshToken,
+                'client_id'     => (string)($constant['client_id'] ?? ''),
+                'client_secret' => (string)($constant['client_secret'] ?? ''),
+                'grant_type'    => 'refresh_token',
+            ];
+            $url = rtrim((string)($constant['zohoAccountURL'] ?? ''), '/') . '/oauth/v2/token';
 
             $requestFactory = GeneralUtility::makeInstance(RequestFactory::class);
-
-            return json_decode(
-                $requestFactory->request($url, 'POST')->getBody()->getContents()
+            $response       = json_decode(
+                $requestFactory->request($url, 'POST', ['form_params' => $params])->getBody()->getContents()
             );
-        } catch (RequestException $e) {
-            return null;
+
+            return is_object($response) ? $response : (object)['error' => 'invalid_response'];
+        } catch (\Throwable $e) {
+            return (object)['error' => $e->getMessage()];
         }
     }
 
     /**
-     * Get extension TypoScript settings.
-     * Compatible with TYPO3 13 and 14.
+     * Store the Zoho refresh token for later form submissions.
+     */
+    protected function persistRefreshToken(array $constant, string $refreshToken): void
+    {
+        $insertQb = GeneralUtility::makeInstance(ConnectionPool::class)
+            ->getQueryBuilderForTable(self::INDEX_TABLE);
+        $insertQb
+            ->insert(self::INDEX_TABLE)
+            ->values([
+                'pid'           => 0,
+                'client_id'     => (string)($constant['client_id'] ?? ''),
+                'client_secret' => (string)($constant['client_secret'] ?? ''),
+                'authtoken'     => $refreshToken,
+            ])
+            ->executeStatement();
+    }
+
+    /**
+     * Show a frontend alert and stop form processing.
+     */
+    protected function alertAndStop(string $message): void
+    {
+        $redirectUri = $this->getRedirectUri($this->getCurrentPageId());
+        echo '<script>
+            alert("' . addslashes($message) . '");
+            setTimeout(function() {
+                window.location.href = "' . $redirectUri . '";
+            }, 100);
+        </script>';
+        exit;
+    }
+
+    /**
+     * Get extension settings.
+     * Site Settings are the source of truth for TYPO3 13/14 Site Sets, because
+     * TypoScript still contains extension defaults (empty client_id, .com URLs).
      */
     public function getConstants(): array
     {
-        $configurationManager = GeneralUtility::makeInstance(ConfigurationManagerInterface::class);
-        $typoScriptSetup      = $configurationManager->getConfiguration(
-            ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT
-        );
+        $settings = [];
 
-        return $typoScriptSetup['plugin.']['tx_nszoho.']['settings.'] ?? [];
+        try {
+            $configurationManager = GeneralUtility::makeInstance(ConfigurationManagerInterface::class);
+            $typoScriptSetup      = $configurationManager->getConfiguration(
+                ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT
+            );
+            $settings = $typoScriptSetup['plugin.']['tx_nszoho.']['settings.']
+                ?? $typoScriptSetup['plugin']['tx_nszoho']['settings']
+                ?? [];
+        } catch (\Throwable $e) {
+            $settings = [];
+        }
+
+        $request = $GLOBALS['TYPO3_REQUEST'] ?? null;
+        $site    = $request?->getAttribute('site');
+        if ($site && method_exists($site, 'getSettings')) {
+            $siteSettings = $site->getSettings();
+            $map = method_exists($siteSettings, 'getMap')
+                ? $siteSettings->getMap()
+                : (method_exists($siteSettings, 'getAllFlat') ? $siteSettings->getAllFlat() : []);
+            $prefix = 'plugin.tx_nszoho.settings.';
+            foreach ($map as $key => $value) {
+                if (!is_string($key) || !str_starts_with($key, $prefix) || is_array($value)) {
+                    continue;
+                }
+                $short = substr($key, strlen($prefix));
+                if ($short !== '' && $value !== null && $value !== '') {
+                    $settings[$short] = $value;
+                }
+            }
+        }
+
+        return $settings;
     }
 
     /**
