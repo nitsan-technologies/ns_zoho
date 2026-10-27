@@ -35,7 +35,7 @@
             "cms-package-dir": "{$vendor-dir}/typo3/cms",
             "web-dir": ".Build/public",
             "extension-key": "ns_zoho",
-            "version": "14.1.1",
+            "version": "14.1.2",
             "Package": {
                 "providesPackages": {}
             }
