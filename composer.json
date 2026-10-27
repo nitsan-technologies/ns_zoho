@@ -14,6 +14,7 @@
         "issues": "https://github.com/nitsan-technologies/ns_zoho/issues"
     },
     "require": {
+        "php": ">=8.2 <8.6",
         "typo3/cms-core": "^13 || ^14",
         "nitsan/ns-license": "^14.5.4"
     },
@@ -33,7 +34,11 @@
         "typo3/cms": {
             "cms-package-dir": "{$vendor-dir}/typo3/cms",
             "web-dir": ".Build/public",
-            "extension-key": "ns_zoho"
+            "extension-key": "ns_zoho",
+            "version": "14.1.2",
+            "Package": {
+                "providesPackages": {}
+            }
         }
     }
 }
