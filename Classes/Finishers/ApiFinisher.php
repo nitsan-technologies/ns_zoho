@@ -17,14 +17,14 @@ declare(strict_types=1);
 
 namespace Nitsan\NsZoho\Finishers;
 
-use Doctrine\DBAL\Driver\Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
+use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Query\QueryBuilder;
 use TYPO3\CMS\Core\Http\RequestFactory;
-use TYPO3\CMS\Core\Information\Typo3Version;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
 use TYPO3\CMS\Extbase\Domain\Model\FileReference;
@@ -49,7 +49,6 @@ class ApiFinisher extends AbstractFinisher
     /**
      * Executes this finisher
      *
-     * @throws Exception
      * @see AbstractFinisher::execute()
      */
     protected function executeInternal(): void
@@ -72,7 +71,7 @@ class ApiFinisher extends AbstractFinisher
         if (count($tokenResult) === 0) {
             $refreshTokenGenerate = $this->generateRefreshToken($constant);
             if (isset($refreshTokenGenerate->refresh_token)) {
-                $refToken = $refreshTokenGenerate->refresh_token;
+                $refToken = (string)$refreshTokenGenerate->refresh_token;
                 $this->persistRefreshToken($constant, $refToken);
             } elseif (!empty($constant['authtoken'])) {
                 // Site setting may already contain a refresh token instead of a one-time grant code.
@@ -92,12 +91,12 @@ class ApiFinisher extends AbstractFinisher
             }
         } else {
             foreach ($tokenResult as $zoho) {
-                $refToken = $zoho['authtoken'];
+                $refToken = (string)($zoho['authtoken'] ?? '');
             }
         }
 
         $refreshToken = $this->generateNewAccessToken($constant, $refToken);
-        $auth         = $refreshToken->access_token ?? '';
+        $auth         = (string)($refreshToken?->access_token ?? '');
 
         if ($auth === '') {
             $this->alertAndStop(
@@ -132,26 +131,32 @@ class ApiFinisher extends AbstractFinisher
                 if ($file instanceof FileReference) {
                     $file = $file->getOriginalResource();
                 }
+                if (!is_object($file) || !method_exists($file, 'getName')) {
+                    continue;
+                }
 
-                $folderName = $file->getParentFolder()->getName();
-                $fileName   = $file->getName();
+                $fileName = $file->getName();
+                if (method_exists($file, 'getParentFolder')) {
+                    $parentFolder = $file->getParentFolder();
+                    if (is_object($parentFolder) && method_exists($parentFolder, 'getName')) {
+                        $folderName = $parentFolder->getName();
+                    }
+                }
             }
 
             foreach ($availableFields as $key => $values) {
-                if ($key === $element->getIdentifier()) {
-                    if (is_array($values)) {
-                        $values = implode(', ', $values);
-                    }
-                    $newArray[$key] = $values;
+                $safeKey = $key ?? '';
+                if ($safeKey !== $element->getIdentifier()) {
+                    continue;
                 }
+                if (is_array($values)) {
+                    $values = $this->stringifyList($values);
+                }
+                $newArray[$safeKey] = $values;
             }
         }
 
-        $matchingFormValues = [];
-        foreach ($array as $key) {
-            $matchingFormValues[$key] = $newArray[$key] ?? '';
-        }
-        $finalResult = array_combine($resultExtensProperties, $matchingFormValues) ?: [];
+        $finalResult = $this->combineMappedFields($array, $resultExtensProperties, $newArray);
 
         if ($fileName !== null) {
             $finalResult = array_replace($finalResult, ['Record_Image' => $fileName]);
@@ -164,23 +169,11 @@ class ApiFinisher extends AbstractFinisher
         $result = $this->postData($auth, $finalResult, $zohoModule);
 
         if (isset($result['data'][0]['status']) && $result['data'][0]['status'] === 'error') {
-            $message = $result['data'][0]['code'] . ': ' . $result['data'][0]['message'];
-            if (!empty($result['data'][0]['details'])) {
-                $message .= ' (' . implode(', ', array_map(
-                    fn($k, $v) => "$k=$v",
-                    array_keys($result['data'][0]['details']),
-                    $result['data'][0]['details']
-                )) . ')';
+            $message = (string)($result['data'][0]['code'] ?? '') . ': ' . (string)($result['data'][0]['message'] ?? '');
+            if (!empty($result['data'][0]['details']) && is_array($result['data'][0]['details'])) {
+                $message .= ' (' . $this->stringifyAssoc($result['data'][0]['details']) . ')';
             }
-
-            $redirectUri = $this->getRedirectUri($this->getCurrentPageId());
-            echo '<script>
-                alert("' . addslashes($message) . '");
-                setTimeout(function() {
-                    window.location.href = "' . $redirectUri . '";
-                }, 100);
-            </script>';
-            exit;
+            $this->alertAndStop($message);
         }
 
         if ($fileName !== null && $folderName !== null) {
@@ -191,8 +184,8 @@ class ApiFinisher extends AbstractFinisher
                     $auth,
                     $zohoModule,
                     $folderName,
-                    $recordId,
-                    $finalResult['Record_Image']
+                    (string)$recordId,
+                    (string)$finalResult['Record_Image']
                 );
             }
         }
@@ -204,15 +197,19 @@ class ApiFinisher extends AbstractFinisher
      */
     protected function getCurrentPageId(): int
     {
-        return (int)$GLOBALS['TYPO3_REQUEST']
-            ->getAttribute('frontend.page.information')
-            ->getId();
+        $request = $this->getRequest();
+        $pageInformation = $request?->getAttribute('frontend.page.information');
+        if ($pageInformation !== null && method_exists($pageInformation, 'getId')) {
+            return (int)$pageInformation->getId();
+        }
+
+        return 0;
     }
 
     /**
      * Get token data from the database table.
      */
-    public function tokenContent(array $constant, $queryBuilder): array
+    public function tokenContent(array $constant, QueryBuilder $queryBuilder): array
     {
         return $queryBuilder
             ->select('*')
@@ -220,11 +217,11 @@ class ApiFinisher extends AbstractFinisher
             ->where(
                 $queryBuilder->expr()->eq(
                     'client_id',
-                    $queryBuilder->createNamedParameter($constant['client_id'], Connection::PARAM_STR)
+                    $queryBuilder->createNamedParameter((string)($constant['client_id'] ?? ''), Connection::PARAM_STR)
                 ),
                 $queryBuilder->expr()->eq(
                     'client_secret',
-                    $queryBuilder->createNamedParameter($constant['client_secret'], Connection::PARAM_STR)
+                    $queryBuilder->createNamedParameter((string)($constant['client_secret'] ?? ''), Connection::PARAM_STR)
                 )
             )
             ->executeQuery()
@@ -237,7 +234,10 @@ class ApiFinisher extends AbstractFinisher
     public function postData(string $auth, array $finalResult, string $zohoModule): array
     {
         $constant = $this->getConstants();
-        $json     = json_encode(['data' => [$finalResult]]);
+        $json = json_encode(['data' => [$finalResult]]);
+        if ($json === false) {
+            $json = '{"data":[{}]}';
+        }
 
         return $this->getCurl($constant, $json, $auth, $zohoModule);
     }
@@ -255,25 +255,34 @@ class ApiFinisher extends AbstractFinisher
     ): array {
         $targetDir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/');
         $filename  = $targetDir . $folderName . '/' . $sendyourdetail;
-        $cfile     = '';
-
-        if (function_exists('curl_file_create')) {
-            $cfile = curl_file_create($filename, '', basename($filename));
-        }
 
         $constant = $this->getConstants();
-        $url      = $constant['zohoURL'] . '/crm/v2/' . $zohoModule . '/' . $recordId . '/' . $attachType;
+        $url = (string)($constant['zohoURL'] ?? '') . '/crm/v2/' . $zohoModule . '/' . $recordId . '/' . $attachType;
 
-        return $this->getCurlForAttachment($url, ['file' => $cfile], $auth);
+        return $this->getCurlForAttachment($url, ['file' => $filename], $auth);
     }
 
     /**
      * Send file via Guzzle multipart request.
-     *
-     * @throws GuzzleException
      */
     public function getCurlForAttachment(string $url, array $json, string $auth): array
     {
+        $filename = $this->resolveAttachmentFilename($json['file'] ?? null);
+        if ($filename === '' || !is_readable($filename)) {
+            return [
+                'error' => 'attachment not readable',
+                'code'  => 0,
+            ];
+        }
+
+        $handle = fopen($filename, 'r');
+        if ($handle === false) {
+            return [
+                'error' => 'unable to open attachment',
+                'code'  => 0,
+            ];
+        }
+
         $client = new Client();
 
         try {
@@ -284,30 +293,15 @@ class ApiFinisher extends AbstractFinisher
                 'multipart' => [
                     [
                         'name'     => 'file',
-                        'contents' => fopen($json['file']->name, 'r'),
+                        'contents' => $handle,
+                        'filename' => basename($filename),
                     ],
                 ],
             ]);
 
             return json_decode($response->getBody()->getContents(), true) ?? [];
-
-        } catch (RequestException $e) {
-            $status = json_decode($e->getResponse()->getBody()->getContents(), true);
-            if (($status['status'] ?? '') === 'error') {
-                $redirectUri = $this->getRedirectUri($this->getCurrentPageId());
-                echo '<script>
-                    alert("' . addslashes($status['code'] . ': ' . $status['message']) . '");
-                    setTimeout(function() {
-                        window.location.href = "' . $redirectUri . '";
-                    }, 100);
-                </script>';
-                die;
-            }
-
-            return [
-                'error' => $e->getMessage(),
-                'code'  => $e->getCode(),
-            ];
+        } catch (GuzzleException $e) {
+            return $this->handleGuzzleException($e);
         }
     }
 
@@ -316,7 +310,7 @@ class ApiFinisher extends AbstractFinisher
      */
     public function getCurl(array $constant, string $data, string $auth, string $zohoModule): array
     {
-        $apiURL  = $constant['zohoURL'] . '/crm/v2/' . $zohoModule;
+        $apiURL = (string)($constant['zohoURL'] ?? '') . '/crm/v2/' . $zohoModule;
         $client  = new Client();
         $headers = [
             'Content-Type'  => 'application/json',
@@ -330,24 +324,8 @@ class ApiFinisher extends AbstractFinisher
             ]);
 
             return json_decode($response->getBody()->getContents(), true) ?? [];
-
-        } catch (RequestException $e) {
-            $status = json_decode($e->getResponse()->getBody()->getContents(), true);
-            if (($status['status'] ?? '') === 'error') {
-                $redirectUri = $this->getRedirectUri($this->getCurrentPageId());
-                echo '<script>
-                    alert("' . addslashes($status['code'] . ': ' . $status['message']) . '");
-                    setTimeout(function() {
-                        window.location.href = "' . $redirectUri . '";
-                    }, 100);
-                </script>';
-                die;
-            }
-
-            return [
-                'error' => $e->getMessage(),
-                'code'  => $e->getCode(),
-            ];
+        } catch (GuzzleException $e) {
+            return $this->handleGuzzleException($e);
         }
     }
 
@@ -430,7 +408,7 @@ class ApiFinisher extends AbstractFinisher
     /**
      * Show a frontend alert and stop form processing.
      */
-    protected function alertAndStop(string $message): void
+    protected function alertAndStop(string $message): never
     {
         $redirectUri = $this->getRedirectUri($this->getCurrentPageId());
         echo '<script>
@@ -463,7 +441,7 @@ class ApiFinisher extends AbstractFinisher
             $settings = [];
         }
 
-        $request = $GLOBALS['TYPO3_REQUEST'] ?? null;
+        $request = $this->getRequest();
         $site    = $request?->getAttribute('site');
         if ($site && method_exists($site, 'getSettings')) {
             $siteSettings = $site->getSettings();
@@ -492,8 +470,137 @@ class ApiFinisher extends AbstractFinisher
     public function getRedirectUri(int $uid): string
     {
         $contentObject = GeneralUtility::makeInstance(ContentObjectRenderer::class);
-        $url           = $contentObject->typoLink_URL(['parameter' => $uid]);
+        $request = $this->getRequest();
+        if ($request instanceof ServerRequestInterface) {
+            $contentObject->setRequest($request);
+        }
+        $url = $contentObject->typoLink_URL(['parameter' => $uid]);
 
-        return GeneralUtility::locationHeaderUrl($url);
+        return $this->toAbsoluteUrl($url);
+    }
+
+    /**
+     * TYPO3 13: locationHeaderUrl(string $path)
+     * TYPO3 14.3+: locationHeaderUrl(string $path, ?ServerRequestInterface $request = null)
+     * Passing a second argument on v13 throws ArgumentCountError; omitting it on
+     * v14.3+ emits E_USER_DEPRECATED.
+     */
+    protected function toAbsoluteUrl(string $path): string
+    {
+        $request = $this->getRequest();
+        $parameterCount = (new \ReflectionMethod(GeneralUtility::class, 'locationHeaderUrl'))->getNumberOfParameters();
+        if ($parameterCount >= 2 && $request instanceof ServerRequestInterface) {
+            return GeneralUtility::locationHeaderUrl($path, $request);
+        }
+
+        return GeneralUtility::locationHeaderUrl($path);
+    }
+
+    /**
+     * Map form identifiers onto Zoho CRM field names.
+     * Null keys are stored as '' (PHP 8.5 deprecates null array offsets).
+     *
+     * @param list<int|string|null> $formIdentifiers
+     * @param list<string> $zohoFieldNames
+     * @param array<int|string, mixed> $formValues
+     * @return array<int|string, mixed>
+     */
+    protected function combineMappedFields(array $formIdentifiers, array $zohoFieldNames, array $formValues): array
+    {
+        $matchingFormValues = [];
+        foreach ($formIdentifiers as $key) {
+            $safeKey = $key ?? '';
+            $matchingFormValues[$safeKey] = $formValues[$safeKey] ?? '';
+        }
+        if ($zohoFieldNames === [] || count($zohoFieldNames) !== count($matchingFormValues)) {
+            return [];
+        }
+        $combined = array_combine($zohoFieldNames, $matchingFormValues);
+
+        return is_array($combined) ? $combined : [];
+    }
+
+    protected function getRequest(): ?ServerRequestInterface
+    {
+        $request = $GLOBALS['TYPO3_REQUEST'] ?? null;
+
+        return $request instanceof ServerRequestInterface ? $request : null;
+    }
+
+    /**
+     * @param array<int|string, mixed> $values
+     */
+    protected function stringifyList(array $values): string
+    {
+        $parts = [];
+        foreach ($values as $value) {
+            $parts[] = $this->stringifyValue($value);
+        }
+
+        return implode(', ', $parts);
+    }
+
+    /**
+     * @param array<int|string, mixed> $details
+     */
+    protected function stringifyAssoc(array $details): string
+    {
+        $parts = [];
+        foreach ($details as $key => $value) {
+            $parts[] = (string)($key ?? '') . '=' . $this->stringifyValue($value);
+        }
+
+        return implode(', ', $parts);
+    }
+
+    protected function stringifyValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        if (is_scalar($value)) {
+            return (string)$value;
+        }
+
+        $encoded = json_encode($value);
+
+        return $encoded === false ? '' : $encoded;
+    }
+
+    protected function resolveAttachmentFilename(mixed $file): string
+    {
+        if (is_string($file)) {
+            return $file;
+        }
+        if ($file instanceof \CURLFile) {
+            return $file->getFilename();
+        }
+        if (is_object($file) && isset($file->name) && is_string($file->name)) {
+            return $file->name;
+        }
+
+        return '';
+    }
+
+    /**
+     * @return array{error: string, code: int}
+     */
+    protected function handleGuzzleException(GuzzleException $exception): array
+    {
+        if ($exception instanceof RequestException) {
+            $response = $exception->getResponse();
+            $payload = $response !== null ? $response->getBody()->getContents() : '';
+            $status = $payload !== '' ? json_decode($payload, true) : null;
+            if (is_array($status) && ($status['status'] ?? '') === 'error') {
+                $this->alertAndStop(
+                    (string)($status['code'] ?? '') . ': ' . (string)($status['message'] ?? '')
+                );
+            }
+        }
+
+        return [
+            'error' => $exception->getMessage(),
+            'code'  => $exception->getCode(),
+        ];
     }
 }
